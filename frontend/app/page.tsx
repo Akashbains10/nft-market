@@ -151,6 +151,7 @@ export default function Home() {
     if (!realEstateContract) return;
 
     const fetchNFTs = async () => {
+      debugger;
       try {
         const properties = [];
         const totalSupply = await realEstateContract.totalSupply();

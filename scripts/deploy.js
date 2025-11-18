@@ -3,7 +3,7 @@ const hre = require("hardhat");
 const path = require("path");
 const { ethers } = hre;
 
-const tokens = (n) => ethers.utils.parseUnits(n.toString(), "ether");
+const tokens = (n) => ethers.parseUnits(n.toString(), "ether");
 
 const listings = [
   { id: 0, price: tokens(20), escrowAmount: tokens(10) },
@@ -54,11 +54,11 @@ async function main() {
   // 🏠 Deploy Real Estate contract
   const RealEstate = await ethers.getContractFactory("RealEstate");
   const realEstate = await RealEstate.deploy();
-  await realEstate.deployed();
-  console.log(`✅ RealEstate deployed at: ${realEstate.address}`);
+  await realEstate.waitForDeployment();
+  console.log(`✅ RealEstate deployed at: ${realEstate.target}`);
 
   // Save RealEstate contract info to frontend
-  saveFilesToFrontend("RealEstate", realEstate.address);
+  saveFilesToFrontend("RealEstate", realEstate.target);
 
   // 🪙 Property metadata URIs
   const propertyURIs = Array.from(
@@ -81,15 +81,15 @@ async function main() {
   // 💼 Deploy Escrow contract
   const Escrow = await ethers.getContractFactory("Escrow");
   const escrow = await Escrow.deploy(
-    realEstate.address,
+    realEstate.target,
     seller.address,
     lender.address
   );
-  await escrow.deployed();
-  console.log(`✅ Escrow deployed at: ${escrow.address}`);
+  await escrow.waitForDeployment();
+  console.log(`✅ Escrow deployed at: ${escrow.target}`);
   
   // Save Escrow contract info to frontend
-  saveFilesToFrontend("Escrow", escrow.address);
+  saveFilesToFrontend("Escrow", escrow.target);
 
   // ✅ Approve & List properties dynamically
   console.log(`\n📝 Approving & listing ${listings.length} properties...`);
@@ -97,7 +97,7 @@ async function main() {
     // Approve escrow to transfer this property
     const approveTx = await realEstate
       .connect(seller)
-      .approve(escrow.address, id);
+      .approve(escrow.target, id);
     await approveTx.wait();
 
     // List property on escrow
@@ -107,7 +107,7 @@ async function main() {
     await listTx.wait();
 
     console.log(
-      `✅ Property ${id} listed at price ${ethers.utils.formatEther(price)} ETH`
+      `✅ Property ${id} listed at price ${ethers.formatEther(price)} ETH`
     );
   }
 
