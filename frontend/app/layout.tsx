@@ -27,7 +27,12 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
-}
+};
+
+// Add fonts:
+const geistSans = Geist({
+  subsets: ["latin"],
+});
 
 export default function RootLayout({
   children,
@@ -37,8 +42,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`font-sans antialiased`}>
-        {children}
-        <Analytics />
+          {children}
+          <Analytics />
       </body>
     </html>
   )

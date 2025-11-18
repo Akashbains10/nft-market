@@ -1,22 +1,31 @@
 import { PropertyNFT } from "@/types/property";
-import { create } from "zustand";
+import { Contract } from "ethers";
+import {create} from "zustand";
 
-interface IStore {
-  nftProperty: PropertyNFT | null;
+type NFTStore = {
+  walletConnected: boolean;
+  setWalletConnected: (v: boolean) => void;
   account: string | null;
-  isWalletConnected: boolean;
-  setAccount: (acc: string | null) => void;
+  setAccount: (a: string | null) => void;
+  realEstateContract: Contract | null;
+  setRealEstateContract: (c: Contract | null) => void;
+  escrowContract: Contract | null;
+  setEscrowContract: (c: Contract | null) => void;
+  nftProperty: PropertyNFT | null;
   setNftProperty: (property: PropertyNFT) => void;
-  setWalletConnected: (isConnected: boolean) => void;
-}
+};
 
-const useNFTStore = create<IStore>((set) => ({
+const useNFTStore = create<NFTStore>((set) => ({
+  walletConnected: false,
+  setWalletConnected: (v: boolean) => set({ walletConnected: v }),
+  account: null,
+  setAccount: (a: string | null) => set({ account: a }),
+  realEstateContract: null,
+  setRealEstateContract: (c: Contract | null) => set({ realEstateContract: c }),
+  escrowContract: null,
+  setEscrowContract: (c: Contract | null) => set({ escrowContract: c }),
   nftProperty: null,
-  account: '',
-  isWalletConnected: false,
-  setAccount: (acc) => set(() => ({ account: acc })),
-  setNftProperty: (property) => set(() => ({ nftProperty: property })),
-  setWalletConnected: (isConnected)=> set(()=>({isWalletConnected: isConnected}))
+  setNftProperty: (property: PropertyNFT) => set(() => ({ nftProperty: property })),
 }));
 
 export default useNFTStore;

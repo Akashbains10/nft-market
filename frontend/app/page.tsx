@@ -1,6 +1,6 @@
 "use client";
 
-import { BrowserProvider, Contract, ethers } from "ethers";
+import { BrowserProvider, ethers } from "ethers";
 import { useState, useEffect } from "react";
 import Header from "@/components/header";
 import NFTGrid from "@/components/nft-grid";
@@ -14,55 +14,57 @@ import Escrow from "@/contracts/Escrow.json";
 import { PropertyNFT } from "@/types/property";
 import useNFTStore from "@/store/useNFTStore";
 
-export default function Home() {
-  const realEstateAddress = addresses["localhost"].RealEstate;
-  const escrowAddress = addresses["localhost"].Escrow;
+const realEstateAddress = addresses["localhost"].RealEstate;
+const escrowAddress = addresses["localhost"].Escrow;
 
+export const getMetaMaskProvider = () => {
+  if (!window.ethereum) return null;
+
+  const provider = window.ethereum.providers
+    ? window.ethereum.providers.find((p) => p.isMetaMask)
+    : window.ethereum;
+
+  return provider?.isMetaMask ? provider : null;
+};
+
+export default function Home() {
   // States
-  const { setWalletConnected, setAccount } = useNFTStore();
+  const {
+    setWalletConnected,
+    setAccount,
+    realEstateContract,
+    setRealEstateContract,
+    setEscrowContract,
+  } = useNFTStore();
   const [mounted, setMounted] = useState(false);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
-  const [realEstateContract, setRealEstateContract] = useState<Contract | null>(
-    null
-  );
-  const [escrowContract, setEscrowContract] = useState<Contract | null>(null);
   const [nftProperties, setNftProperties] = useState<PropertyNFT[]>([]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const getMetaMaskProvider = () => {
-    if (!window.ethereum) return null;
-
-    const provider = window.ethereum.providers
-      ? window.ethereum.providers.find((p) => p.isMetaMask)
-      : window.ethereum;
-
-    return provider?.isMetaMask ? provider : null;
-  };
-
   // Switch to Hardhat Chain
-  const switchToHardhatNetwork = async (provider: any) => {
-    try {
-      await provider.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0x7A69" }],
-      });
-    } catch (err) {
-      await provider.request({
-        method: "wallet_addEthereumChain",
-        params: [
-          {
-            chainId: "0x7A69",
-            chainName: "Hardhat Localhost",
-            rpcUrls: ["http://127.0.0.1:8545"],
-            nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-          },
-        ],
-      });
-    }
-  };
+  // const switchToHardhatNetwork = async (provider: any) => {
+  //   try {
+  //     await provider.request({
+  //       method: "wallet_switchEthereumChain",
+  //       params: [{ chainId: "0x7A69" }],
+  //     });
+  //   } catch (err) {
+  //     await provider.request({
+  //       method: "wallet_addEthereumChain",
+  //       params: [
+  //         {
+  //           chainId: "0x7A69",
+  //           chainName: "Hardhat Localhost",
+  //           rpcUrls: ["http://127.0.0.1:8545"],
+  //           nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+  //         },
+  //       ],
+  //     });
+  //   }
+  // };
 
   // Load Contract Instances
   const loadContracts = (signer: any) => {
@@ -79,6 +81,7 @@ export default function Home() {
 
   useEffect(() => {
     const autoConnect = async () => {
+      // if (localStorage.getItem("walletDisconnected") === "true") return;
       try {
         const metamask = getMetaMaskProvider();
         if (!metamask) return;
@@ -88,21 +91,17 @@ export default function Home() {
 
         // check if wallet already connected
         const accounts = await metamask.request({ method: "eth_accounts" });
-
         if (accounts.length > 0) {
           const userAddress = ethers.getAddress(accounts[0]);
           setAccount(userAddress);
           setWalletConnected(true);
         }
 
-        await switchToHardhatNetwork(metamask);
-
-        const signer = await web3.getSigner();
-        loadContracts(signer);
+        // await switchToHardhatNetwork(metamask);
+        loadContracts(web3);
       } catch (err: any) {
-        // debugger;
-        if (err.error.code === -32002) {
-          console.log("Connection request already pending or MetaMask locked.");
+        if (err.code === "ACTION_REJECTED") {
+          console.log("Connection request rejected or MetaMask locked.");
         } else {
           console.error("Wallet connection error:", err);
         }
@@ -113,32 +112,39 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const provider = window.ethereum;
-    if (!provider) return;
+    const metamask = getMetaMaskProvider();
+    if (!metamask) return;
 
-    const handleAccountsChanged = (accounts: string[]) => {
+    const handleAccountsChanged = async (accounts: string[]) => {
       if (!accounts || accounts.length === 0) {
         setAccount(null);
         setWalletConnected(false);
         return;
       }
 
-      try {
-        const user = ethers.getAddress(accounts[0]);
-        setAccount(user);
-        setWalletConnected(true);
-      } catch (err) {
-        console.error("Invalid account address:", err);
+      const user = ethers.getAddress(accounts[0]);
+      setAccount(user);
+      setWalletConnected(true);
+
+      // Refresh signer + contracts
+      if (provider) {
+        const signer = await provider.getSigner();
+        loadContracts(signer);
       }
     };
 
-    provider.on("accountsChanged", handleAccountsChanged);
-    provider.on("chainChanged", () => { window.location.reload() });
+    const handleChainChanged = () => {
+      window.location.reload();
+    };
+
+    metamask.on("accountsChanged", handleAccountsChanged);
+    metamask.on("chainChanged", handleChainChanged);
 
     return () => {
-      provider.removeListener("accountsChanged", handleAccountsChanged);
+      metamask.removeListener("accountsChanged", handleAccountsChanged);
+      metamask.removeListener("chainChanged", handleChainChanged);
     };
-  }, []);
+  }, [provider]);
 
   // 🔹 Fetch NFT Properties
   useEffect(() => {

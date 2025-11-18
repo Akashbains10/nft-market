@@ -12,10 +12,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Wallet, LogOut, Copy, Check } from "lucide-react";
 import useNFTStore from "@/store/useNFTStore";
+import { ethers } from "ethers";
 
 export default function WalletButton() {
+  
   const [copied, setCopied] = useState(false);
-  const { account, isWalletConnected, setAccount, setWalletConnected } =
+  const { account, walletConnected: isWalletConnected, setAccount, setWalletConnected } =
     useNFTStore();
 
   // Static mock wallet address for demonstration
@@ -29,11 +31,59 @@ export default function WalletButton() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const connectWallet = () => {};
+  const switchToHardhatNetwork = async (provider: any) => {
+    try {
+      await provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: "0x7A69" }],
+      });
+    } catch (err) {
+      await provider.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: "0x7A69",
+            chainName: "Hardhat Localhost",
+            rpcUrls: ["http://127.0.0.1:8545"],
+            nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+          },
+        ],
+      });
+    }
+  };
 
-  const disconnectWallet = () => {
+  const getMetaMaskProvider = () => {
+    if (!window.ethereum) return null;
+
+    const provider = window.ethereum.providers
+      ? window.ethereum.providers.find((p) => p.isMetaMask)
+      : window.ethereum;
+
+    return provider?.isMetaMask ? provider : null;
+  };
+
+  const connectWallet = async () => {
+    const metamask = getMetaMaskProvider();
+    if (!metamask) return;
+
+    new ethers.BrowserProvider(metamask);
+
+    // check if wallet already connected
+    const accounts = await metamask.request({ method: "eth_requestAccounts" });
+
+    if (accounts.length > 0) {
+      const userAddress = ethers.getAddress(accounts[0]);
+      localStorage.removeItem("walletDisconnected");
+      setAccount(userAddress);
+      setWalletConnected(true);
+    }
+    await switchToHardhatNetwork(metamask);
+  };
+
+  const disconnectWallet = async () => {
     setAccount(null);
     setWalletConnected(false);
+    localStorage.setItem("walletDisconnected", "true");
   };
 
   return (
