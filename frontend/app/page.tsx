@@ -91,6 +91,7 @@ export default function Home() {
 
         // check if wallet already connected
         const accounts = await metamask.request({ method: "eth_accounts" });
+        console.log("Auto-connected accounts:", accounts);
         if (accounts.length > 0) {
           const userAddress = ethers.getAddress(accounts[0]);
           setAccount(userAddress);
@@ -151,12 +152,11 @@ export default function Home() {
     if (!realEstateContract) return;
 
     const fetchNFTs = async () => {
-      debugger;
       try {
         const properties = [];
         const totalSupply = await realEstateContract.totalSupply();
 
-        for (let i = 0; i < totalSupply; i++) {
+        for (let i = 1; i <= totalSupply; i++) {
           const nftURI = await realEstateContract.tokenURI(i);
           const res = await fetch(nftURI);
           const metadata = await res.json();

@@ -13,12 +13,11 @@ import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { PropertyNFT } from "@/types/property";
 import { extractPrice } from "./nft-grid";
 import useNFTStore from "@/store/useNFTStore";
-import { ethers, Signer } from "ethers";
+import { Contract, ethers, Signer } from "ethers";
 import addresses from "@/address.json";
 import Escrow from "@/contracts/Escrow.json";
 import { get } from "http";
 import { getMetaMaskProvider } from "@/app/page";
-
 
 interface BuyModalProps {
   nft: PropertyNFT;
@@ -28,9 +27,7 @@ interface BuyModalProps {
 
 const escrowAddress = addresses["localhost"].Escrow;
 
-
 export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
-  const { escrowContract, realEstateContract } = useNFTStore();
   const [step, setStep] = useState<
     "confirm" | "processing" | "success" | "error"
   >("confirm");
@@ -72,11 +69,42 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
     nftId: string,
     escrowAmount: number
   ) => {
+    console.log("Depositing Earnest:", escrowAmount);
     const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
     const tx = await escrow.depositEarnest(nftId, {
-      value: ethers.parseEther(escrowAmount.toString()),
+      value: escrowAmount,
     });
 
+    await tx.wait();
+    return tx.hash;
+  };
+
+  const sendLoanAmount = async (signer: Signer, loanAmount: bigint) => {
+    console.log("Sending Loan Amount:", ethers.formatEther(loanAmount), "ETH");
+    console.log("Sending Loan Amount in wei:", loanAmount);
+    const tx = await signer.sendTransaction({
+      to: escrowAddress,
+      value: loanAmount,
+    });
+    await tx.wait();
+    return tx.hash;
+  };
+
+  const finalizeSale = async (nftId: string, escrow: Contract, signer: Signer) => {
+    console.log("Purchase amount:", await escrow.purchaseAmount(nftId));
+    // 🔍 CHECK BALANCE BEFORE FINALIZE
+    const provider = signer.provider;
+    if (!provider) {
+      alert("Signer has no provider");
+      return
+    }
+    const contractBal = await provider.getBalance(escrowAddress);
+    console.log(
+      "ESCROW BALANCE BEFORE FINALIZE:",
+      contractBal
+    );
+
+    const tx = await escrow.finalizeSale(nftId);
     await tx.wait();
     return tx.hash;
   };
@@ -86,16 +114,24 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
       alert("Please install MetaMask to proceed with the purchase.");
       return;
     }
-    // if (!escrowContract) throw new Error("Escrow contract not initialized");
-    
     const metamask = getMetaMaskProvider();
     const provider = new ethers.BrowserProvider(metamask);
     const signer = await provider.getSigner();
     const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
     const escrowAmount = await escrow.escrowAmount(nft.id);
     console.log("Escrow Amount:", ethers.formatEther(escrowAmount), "ETH");
+
     //buyer pay the deposit earnest
-    // depositEarnest(signer, nft.id, escrowAmount);  
+    depositEarnest(signer, nft.id, escrowAmount);
+    const purchasePriceWei = ethers.parseEther(String(extractPrice(nft)));
+    const loanAmount = purchasePriceWei - escrowAmount;
+
+    //lender pay the rest loan amount
+    await sendLoanAmount(signer, loanAmount);
+
+    //finalize the sale and transfer the ownership
+    await finalizeSale(nft?.id, escrow, signer);
+    console.log("NFT purchased successfully");
   };
 
   return (

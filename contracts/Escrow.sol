@@ -8,17 +8,15 @@ interface IERC721 {
 contract Escrow {
     address public nftAddress;
     address payable public seller;
-    address public lender;
 
     mapping(uint => bool) public isListed;
     mapping(uint => uint) public purchaseAmount;
     mapping(uint => uint) public escrowAmount;
     mapping(uint => address) public buyer;
 
-    constructor(address _nftAddress, address _seller, address _lender) {
+    constructor(address _nftAddress, address _seller) {
         nftAddress = _nftAddress;
         seller = payable(_seller);
-        lender = _lender;
     }
 
     modifier onlyBuyer(uint _nftId) {
@@ -45,13 +43,16 @@ contract Escrow {
     }
 
     // buyer will pay the earnest deposit
-    function depositEarnest(uint _nftId) public payable {
-        require(msg.value >= escrowAmount[_nftId]);
+    function depositEarnest(uint _nftId) public payable onlyBuyer(_nftId) {
+        require(
+            msg.value >= escrowAmount[_nftId],
+            "Insufficient earnest amount"
+        );
     }
 
-    function finalizeSale(uint _nftId) public {
+    function finalizeSale(uint _nftId) public onlyBuyer(_nftId) {
         // validate that contract recieve the sufficient ethers
-        require(address(this).balance >= purchaseAmount[_nftId]);
+        require(address(this).balance >= purchaseAmount[_nftId], "Insufficient funds to finalize");
 
         // send purchase price ethers to seller
         (bool success, ) = payable(seller).call{value: address(this).balance}(
@@ -61,7 +62,7 @@ contract Escrow {
         require(success, "Failed to finalize the sale");
 
         // transfer the ownership to buyer
-        IERC721(nftAddress).transferFrom(address(this), buyer[_nftId], _nftId);
+        // IERC721(nftAddress).transferFrom(address(this), buyer[_nftId], _nftId);
     }
 
     receive() external payable {}

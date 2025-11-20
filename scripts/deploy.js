@@ -6,9 +6,9 @@ const { ethers } = hre;
 const tokens = (n) => ethers.parseUnits(n.toString(), "ether");
 
 const listings = [
-  { id: 0, price: tokens(20), escrowAmount: tokens(10) },
-  { id: 1, price: tokens(15), escrowAmount: tokens(5) },
-  { id: 2, price: tokens(10), escrowAmount: tokens(5) },
+  { id: 1, price: tokens(20), escrowAmount: tokens(10) },
+  { id: 2, price: tokens(15), escrowAmount: tokens(5) },
+  { id: 3, price: tokens(10), escrowAmount: tokens(5) },
 ];
 
 // make folder in frontend to save contract info it does not exist
@@ -49,7 +49,9 @@ function saveFilesToFrontend(contractName, contractAddress) {
 
 async function main() {
   // 👥 Setup accounts
-  const [buyer, seller, inspector, lender] = await ethers.getSigners();
+  const [seller, buyer] = await ethers.getSigners();
+  console.log(`👨‍💼 Seller: ${seller.address}`);
+  console.log(`👩‍💼 Buyer: ${buyer.address}`);
 
   // 🏠 Deploy Real Estate contract
   const RealEstate = await ethers.getContractFactory("RealEstate");
@@ -82,8 +84,7 @@ async function main() {
   const Escrow = await ethers.getContractFactory("Escrow");
   const escrow = await Escrow.deploy(
     realEstate.target,
-    seller.address,
-    lender.address
+    seller.address
   );
   await escrow.waitForDeployment();
   console.log(`✅ Escrow deployed at: ${escrow.target}`);

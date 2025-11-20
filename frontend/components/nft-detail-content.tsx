@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import { Heart, Share2, Copy, Check, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import BuyNFTModal from './buy-nft-modal'
 import { PropertyNFT } from '@/types/property'
-import { extractPrice } from './nft-grid'
+import { extractPrice } from './nft-grid';
+import addresses from '@/address.json';
 
 interface NFTDetailContentProps {
   nft: PropertyNFT
@@ -19,6 +19,9 @@ export default function NFTDetailContent({
   isLiked = false,
   onLikeChange,
 }: NFTDetailContentProps) {
+
+const realEstateAddress = addresses["localhost"].RealEstate;
+
   const [liked, setLiked] = useState(isLiked)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [isBuyModalOpen, setIsBuyModalOpen] = useState(false)
@@ -208,7 +211,7 @@ export default function NFTDetailContent({
                 aria-label="Copy contract address"
               >
                 <code className="text-xs font-mono text-primary font-semibold group-hover/copy:text-accent transition-colors">
-                  0x1234...7890
+                  {realEstateAddress.slice(0, 6)}...{realEstateAddress.slice(-4)}
                 </code>
                 {copiedField === 'contract' ? (
                   <Check className="w-4 h-4 text-green-500" />

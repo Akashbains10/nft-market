@@ -9,9 +9,9 @@ describe("Escrow", () => {
   const nftId = 0;
   const ipfsUrl = "https://ipfs.io/ipfs/QmTudSYeM7mz3PkYEWXWqPjomRPHogcMFSq7XAvsvsgAPS";
   
-  let seller, buyer, lender, realEstate, escrow;
+  let seller, buyer, realEstate, escrow;
   beforeEach(async () => {
-    [seller, buyer, lender] = await ethers.getSigners();
+    [seller, buyer] = await ethers.getSigners();
 
     // deploy realestate contract
     const realEstateCompiled = await ethers.getContractFactory("RealEstate");
@@ -24,8 +24,7 @@ describe("Escrow", () => {
     const compiledEscrow = await ethers.getContractFactory("Escrow");
     escrow = await compiledEscrow.deploy(
       realEstate.address,
-      seller.address,
-      lender.address
+      seller.address
     );
 
     // approve property and give authorization to escrow contract
@@ -84,7 +83,7 @@ describe("Escrow", () => {
       await transaction.wait();
 
       // lender pay the remaining ethers
-      await lender.sendTransaction({ to: escrow.address, value: tokens(5) });
+      await buyer.sendTransaction({ to: escrow.address, value: tokens(5) });
 
       // finalize the transaction
       const finalTransaction = await escrow.finalizeSale(nftId);
