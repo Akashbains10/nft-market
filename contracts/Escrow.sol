@@ -11,7 +11,6 @@ contract Escrow {
 
     mapping(uint => bool) public isListed;
     mapping(uint => uint) public purchaseAmount;
-    mapping(uint => uint) public escrowAmount;
     mapping(uint => address) public buyer;
 
     constructor(address _nftAddress, address _seller) {
@@ -30,8 +29,7 @@ contract Escrow {
     function listProperty(
         uint _nftId,
         address _buyer,
-        uint _purchaseAmount,
-        uint _escrowAmount
+        uint _purchaseAmount
     ) public {
         // transfer the ownership to contract
         IERC721(nftAddress).transferFrom(msg.sender, address(this), _nftId);
@@ -39,14 +37,13 @@ contract Escrow {
         isListed[_nftId] = true;
         buyer[_nftId] = _buyer;
         purchaseAmount[_nftId] = _purchaseAmount;
-        escrowAmount[_nftId] = _escrowAmount;
     }
 
     // buyer will pay the earnest deposit
     function depositEarnest(uint _nftId) public payable onlyBuyer(_nftId) {
         require(
-            msg.value >= escrowAmount[_nftId],
-            "Insufficient earnest amount"
+            msg.value >= purchaseAmount[_nftId],
+            "Insufficient funds deposited"
         );
     }
 

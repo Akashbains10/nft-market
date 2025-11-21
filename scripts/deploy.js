@@ -6,9 +6,9 @@ const { ethers } = hre;
 const tokens = (n) => ethers.parseUnits(n.toString(), "ether");
 
 const listings = [
-  { id: 1, price: tokens(20), escrowAmount: tokens(10) },
-  { id: 2, price: tokens(15), escrowAmount: tokens(5) },
-  { id: 3, price: tokens(10), escrowAmount: tokens(5) },
+  { id: 1, price: tokens(20) },
+  { id: 2, price: tokens(15) },
+  { id: 3, price: tokens(10) },
 ];
 
 // make folder in frontend to save contract info it does not exist
@@ -94,7 +94,7 @@ async function main() {
 
   // ✅ Approve & List properties dynamically
   console.log(`\n📝 Approving & listing ${listings.length} properties...`);
-  for (const { id, price, escrowAmount } of listings) {
+  for (const { id, price } of listings) {
     // Approve escrow to transfer this property
     const approveTx = await realEstate
       .connect(seller)
@@ -104,7 +104,7 @@ async function main() {
     // List property on escrow
     const listTx = await escrow
       .connect(seller)
-      .listProperty(id, buyer.address, price, escrowAmount);
+      .listProperty(id, buyer.address, price);
     await listTx.wait();
 
     console.log(

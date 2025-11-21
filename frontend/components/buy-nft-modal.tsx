@@ -67,28 +67,28 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
   const depositEarnest = async (
     signer: Signer,
     nftId: string,
-    escrowAmount: number
+    amount: number
   ) => {
-    console.log("Depositing Earnest:", escrowAmount);
+    console.log("Depositing Earnest:", amount);
     const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
     const tx = await escrow.depositEarnest(nftId, {
-      value: escrowAmount,
+      value: amount,
     });
 
     await tx.wait();
     return tx.hash;
   };
 
-  const sendLoanAmount = async (signer: Signer, loanAmount: bigint) => {
-    console.log("Sending Loan Amount:", ethers.formatEther(loanAmount), "ETH");
-    console.log("Sending Loan Amount in wei:", loanAmount);
-    const tx = await signer.sendTransaction({
-      to: escrowAddress,
-      value: loanAmount,
-    });
-    await tx.wait();
-    return tx.hash;
-  };
+  // const sendLoanAmount = async (signer: Signer, loanAmount: bigint) => {
+  //   console.log("Sending Loan Amount:", ethers.formatEther(loanAmount), "ETH");
+  //   console.log("Sending Loan Amount in wei:", loanAmount);
+  //   const tx = await signer.sendTransaction({
+  //     to: escrowAddress,
+  //     value: loanAmount,
+  //   });
+  //   await tx.wait();
+  //   return tx.hash;
+  // };
 
   const finalizeSale = async (nftId: string, escrow: Contract, signer: Signer) => {
     console.log("Purchase amount:", await escrow.purchaseAmount(nftId));
@@ -118,16 +118,10 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
     const provider = new ethers.BrowserProvider(metamask);
     const signer = await provider.getSigner();
     const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
-    const escrowAmount = await escrow.escrowAmount(nft.id);
-    console.log("Escrow Amount:", ethers.formatEther(escrowAmount), "ETH");
+    const purchaseAmount = await escrow.purchaseAmount(nft.id);
 
     //buyer pay the deposit earnest
-    depositEarnest(signer, nft.id, escrowAmount);
-    const purchasePriceWei = ethers.parseEther(String(extractPrice(nft)));
-    const loanAmount = purchasePriceWei - escrowAmount;
-
-    //lender pay the rest loan amount
-    await sendLoanAmount(signer, loanAmount);
+    await depositEarnest(signer, nft.id, purchaseAmount);
 
     //finalize the sale and transfer the ownership
     await finalizeSale(nft?.id, escrow, signer);
