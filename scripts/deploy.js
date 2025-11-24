@@ -11,6 +11,12 @@ const listings = [
   { id: 3, price: tokens(10) },
 ];
 
+const propertyURIs = [
+  "https://ipfs.io/ipfs/QmWGbin1NkSvvmVJRU8nLpkbLXTwFq5TLEhkRqUJEFrjBp",
+  "https://ipfs.io/ipfs/QmeqzYaqP6PY1qUyTsm31sd6xViRQm4fU4oUgbH4JJmPqW",
+  "https://ipfs.io/ipfs/QmXp1ew4mpgRZpj82fuPQ5A2hTbM67ZaYYFg7b6YBpfT8K",
+];
+
 // make folder in frontend to save contract info it does not exist
 // and save the contract address and abi to the frontend
 
@@ -63,13 +69,13 @@ async function main() {
   saveFilesToFrontend("RealEstate", realEstate.target);
 
   // 🪙 Property metadata URIs
-  const propertyURIs = Array.from(
-    { length: 3 },
-    (_, i) =>
-      `https://ipfs.io/ipfs/QmQVcpsjrA6cr1iJjZAodYwmPekYgbnXGo4DFubJiLc2EB/${
-        i + 1
-      }.json`
-  );
+  // const propertyURIs = Array.from(
+  //   { length: 3 },
+  //   (_, i) =>
+  //     `https://ipfs.io/ipfs/QmQVcpsjrA6cr1iJjZAodYwmPekYgbnXGo4DFubJiLc2EB/${
+  //       i + 1
+  //     }.json`
+  // );
 
   console.log(`\n🏗️ Minting ${propertyURIs.length} properties...`);
   for (const uri of propertyURIs) {
