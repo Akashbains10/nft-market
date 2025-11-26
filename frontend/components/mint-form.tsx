@@ -10,9 +10,11 @@ import { NFTDetailsStep } from "./mint-form/nft-details-step";
 import { PricingStep } from "./mint-form/pricing-step";
 import { ReviewStep } from "./mint-form/review-step";
 import type { FormData, Attribute, CurrentStep } from "./mint-form/types";
+import useNFTStore from "@/store/useNFTStore";
 
 export default function MintForm() {
   // const { toast } = useToast()
+  const { realEstateContract } = useNFTStore();
   const [currentStep, setCurrentStep] = useState<CurrentStep>("details");
   const [isMinting, setIsMinting] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -21,17 +23,14 @@ export default function MintForm() {
     description: "",
     collection: "",
     mediaUrl: "",
-    mediaPreview:"",
+    mediaPreview: "",
     attributes: [],
-    priceETH: ""
+    priceETH: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const isDetailsValid = () => {
-    return (
-      formData.name.trim() &&
-      formData.description.trim()
-    )
+    return formData.name.trim() && formData.description.trim();
   };
 
   const isPricingValid = () => !!formData.priceETH;
@@ -59,7 +58,7 @@ export default function MintForm() {
     const endpoint = "/pinning/pinFileToIPFS";
     const formData = new FormData();
     formData.append("file", file);
-    const response = await axios.post(endpoint,formData);
+    const response = await axios.post(endpoint, formData);
     return `https://gateway.pinata.cloud/ipfs/${response.data.IpfsHash}`;
   };
 
@@ -83,7 +82,7 @@ export default function MintForm() {
       console.error("Media upload failed", error);
       setErrors((prev) => ({ ...prev, media: "Failed to upload media" }));
       toast.error("Failed to upload media");
-    }finally{
+    } finally {
       setLoading(false);
     }
   };
@@ -160,22 +159,38 @@ export default function MintForm() {
     }
   };
 
-  const uploadMetadataToIPFS = async (metadata: FormData): Promise<string> => {
+  // const uploadMetadataToIPFS = async (metadata: FormData): Promise<string> => {
+  //   const endpoint = "/pinning/pinJSONToIPFS";
+  //   const formData = new FormData();
+  //   formData.append("pinataMetadata", JSON.stringify(metadata))
+  //   const response = await axios.post(endpoint, metadata);
+  //   return `https://gateway.pinata.cloud/ipfs/${response.data.IpfsHash}`;
+  // };
+
+  const uploadMetadataToIPFS = async (metadata: any): Promise<string> => {
     const endpoint = "/pinning/pinJSONToIPFS";
-    const formData = new FormData(); 
-    formData.append("pinataMetadata", JSON.stringify(metadata))
-    const response = await axios.post(endpoint, metadata);
+    const response = await axios.post(endpoint, {
+      pinataContent: metadata,
+    });
     return `https://gateway.pinata.cloud/ipfs/${response.data.IpfsHash}`;
   };
 
   const handleMintNFT = async () => {
+    debugger;
     if (!isPricingValid()) {
       return;
     }
-
     setIsMinting(true);
     try {
-      await uploadMetadataToIPFS(formData);
+      const ipfsURL = await uploadMetadataToIPFS(formData);
+
+      // 2. Mint NFT using RealEstate smart contract
+      if (realEstateContract) {
+        const tx = await realEstateContract.mintProperty(ipfsURL);
+        const receipt = await tx.wait();
+        console.log("Minted! TxHash:", receipt.hash);
+      }
+
       toast.success("NFT minted successfully!");
       setFormData({
         name: "",
@@ -184,7 +199,7 @@ export default function MintForm() {
         mediaUrl: "",
         attributes: [],
         priceETH: "",
-        mediaPreview: ""
+        mediaPreview: "",
       });
       setCurrentStep("details");
     } catch (error) {

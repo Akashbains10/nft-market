@@ -3,20 +3,6 @@ const hre = require("hardhat");
 const path = require("path");
 const { ethers } = hre;
 
-const tokens = (n) => ethers.parseUnits(n.toString(), "ether");
-
-const listings = [
-  { id: 1, price: tokens(20) },
-  { id: 2, price: tokens(15) },
-  { id: 3, price: tokens(10) },
-];
-
-const propertyURIs = [
-  "https://ipfs.io/ipfs/QmWGbin1NkSvvmVJRU8nLpkbLXTwFq5TLEhkRqUJEFrjBp",
-  "https://ipfs.io/ipfs/QmeqzYaqP6PY1qUyTsm31sd6xViRQm4fU4oUgbH4JJmPqW",
-  "https://ipfs.io/ipfs/QmXp1ew4mpgRZpj82fuPQ5A2hTbM67ZaYYFg7b6YBpfT8K",
-];
-
 // make folder in frontend to save contract info it does not exist
 // and save the contract address and abi to the frontend
 
@@ -54,12 +40,12 @@ function saveFilesToFrontend(contractName, contractAddress) {
 }
 
 async function main() {
-  // 👥 Setup accounts
+  // Setup accounts
   const [seller, buyer] = await ethers.getSigners();
   console.log(`👨‍💼 Seller: ${seller.address}`);
   console.log(`👩‍💼 Buyer: ${buyer.address}`);
 
-  // 🏠 Deploy Real Estate contract
+  // Deploy Real Estate contract
   const RealEstate = await ethers.getContractFactory("RealEstate");
   const realEstate = await RealEstate.deploy();
   await realEstate.waitForDeployment();
@@ -68,55 +54,16 @@ async function main() {
   // Save RealEstate contract info to frontend
   saveFilesToFrontend("RealEstate", realEstate.target);
 
-  // 🪙 Property metadata URIs
-  // const propertyURIs = Array.from(
-  //   { length: 3 },
-  //   (_, i) =>
-  //     `https://ipfs.io/ipfs/QmQVcpsjrA6cr1iJjZAodYwmPekYgbnXGo4DFubJiLc2EB/${
-  //       i + 1
-  //     }.json`
-  // );
-
-  console.log(`\n🏗️ Minting ${propertyURIs.length} properties...`);
-  for (const uri of propertyURIs) {
-    const tx = await realEstate.connect(seller).mintProperty(uri);
-    await tx.wait();
-  }
-
-  const total = (await realEstate.totalSupply?.())?.toString() || "unknown";
-  console.log(`✅ Total supply after mint: ${total}`);
-
-  // 💼 Deploy Escrow contract
+  // Deploy Escrow contract
   const Escrow = await ethers.getContractFactory("Escrow");
   const escrow = await Escrow.deploy(
     realEstate.target,
-    seller.address
   );
   await escrow.waitForDeployment();
   console.log(`✅ Escrow deployed at: ${escrow.target}`);
   
   // Save Escrow contract info to frontend
   saveFilesToFrontend("Escrow", escrow.target);
-
-  // ✅ Approve & List properties dynamically
-  console.log(`\n📝 Approving & listing ${listings.length} properties...`);
-  for (const { id, price } of listings) {
-    // Approve escrow to transfer this property
-    const approveTx = await realEstate
-      .connect(seller)
-      .approve(escrow.target, id);
-    await approveTx.wait();
-
-    // List property on escrow
-    const listTx = await escrow
-      .connect(seller)
-      .listProperty(id, buyer.address, price);
-    await listTx.wait();
-
-    console.log(
-      `✅ Property ${id} listed at price ${ethers.formatEther(price)} ETH`
-    );
-  }
 
   console.log(`\n🎉 Deployment & setup finished successfully.`);
 }

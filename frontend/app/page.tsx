@@ -81,7 +81,6 @@ export default function Home() {
 
   useEffect(() => {
     const autoConnect = async () => {
-      // if (localStorage.getItem("walletDisconnected") === "true") return;
       try {
         const metamask = getMetaMaskProvider();
         if (!metamask) return;

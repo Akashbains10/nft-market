@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import WalletButton from "./wallet-button"
 import ThemeToggle from "./theme-toggle"
+import Link from "next/link"
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
@@ -35,34 +36,34 @@ export default function Header() {
         </div>
 
         <nav className="hidden md:flex items-center gap-8">
-          <a
+          <Link
             href="/"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
           >
             Explore
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
-          </a>
-          <a
+          </Link>
+          <Link
             href="/mint"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
           >
             Mint NFT
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
-          </a>
-          <a
+          </Link>
+          <Link
             href="#"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
           >
             Collections
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
-          </a>
-          <a
-            href="#"
+          </Link>
+          <Link
+            href="/my-nfts"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
           >
-            Docs
+            My NFT's
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
-          </a>
+          </Link>
         </nav>
 
         <div className="flex items-center gap-3">
