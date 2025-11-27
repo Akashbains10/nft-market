@@ -1,14 +1,22 @@
+export type FilterType = "all" | "listed" | "unlisted" | "sold";
+
 export interface PropertyNFT {
   name: string;
-  address: string;
+  // address: string;
+  collection?: string;
   description: string;
-  image: string;
+  mediaUrl: string;
   id: string;
-  rarity?: string;
   attributes: Attribute[];
+  priceETH?: string;
+}
+
+export interface OwnedNFT extends PropertyNFT {
+  status: FilterType
 }
 
 export interface Attribute {
-  trait_type: string;
+  id?: string;
+  traitType: string;
   value: string | number;
 }

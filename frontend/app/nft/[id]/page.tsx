@@ -60,7 +60,7 @@ export default function NFTDetailPage() {
           <div className="grid grid-cols-1 gap-12">
             {/* Left column - Image */}
             <div className="space-y-8">
-              <NFTDetailHero image={nft.image} name={nft.name} />
+              <NFTDetailHero image={nft.mediaUrl} name={nft.name} />
             </div>
 
             {/* Right column - All info combined in single view */}

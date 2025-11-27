@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +34,7 @@ export default function NFTGrid({
     <div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {properties?.map((nft, idx) => {
+          console.log("Nft", nft)
           return (
             <Link
               key={idx}
@@ -45,7 +46,7 @@ export default function NFTGrid({
                   {/* Image Container with enhanced overlay */}
                   <div className="relative h-72 bg-gradient-to-br from-primary/10 via-accent/5 to-background overflow-hidden">
                     <img
-                      src={nft?.image || "/placeholder.svg"}
+                      src={nft?.mediaUrl || "/placeholder.svg"}
                       alt={nft?.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                     />
@@ -70,15 +71,14 @@ export default function NFTGrid({
                     <Badge
                       className="absolute bottom-4 left-4 capitalize bg-primary/90 backdrop-blur-sm text-primary-foreground border-0 shadow-md font-medium text-xs"
                       variant={
-                        nft?.rarity === "legendary"
+                        nft?.collection === "premium"
                           ? "default"
-                          : nft?.rarity === "epic"
+                          : nft?.collection === "epic"
                           ? "secondary"
                           : "outline"
                       }
                     >
-                      {/* {nft?.rarity} */}
-                      Epic
+                      {nft?.collection}
                     </Badge>
                   </div>
 
@@ -97,7 +97,8 @@ export default function NFTGrid({
                             Current Price
                           </p>
                           <p className="text-xl md:text-2xl font-bold text-primary">
-                            {extractPrice(nft)}
+                            {/* {extractPrice(nft)} */}
+                            {nft?.priceETH}
                             <span className="text-xs text-muted-foreground ml-1 font-normal">
                               ETH
                             </span>

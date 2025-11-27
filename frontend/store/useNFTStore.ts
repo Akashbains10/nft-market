@@ -1,5 +1,5 @@
 import { PropertyNFT } from "@/types/property";
-import { Contract } from "ethers";
+import { BaseContract, Contract } from "ethers";
 import {create} from "zustand";
 
 type NFTStore = {
@@ -9,6 +9,8 @@ type NFTStore = {
   setAccount: (a: string | null) => void;
   realEstateContract: Contract | null;
   setRealEstateContract: (c: Contract | null) => void;
+  realEstateSigner: BaseContract | null;
+  setRealEstateSigner: (c: BaseContract | null) => void;
   escrowContract: Contract | null;
   setEscrowContract: (c: Contract | null) => void;
   nftProperty: PropertyNFT | null;
@@ -22,6 +24,8 @@ const useNFTStore = create<NFTStore>((set) => ({
   setAccount: (a: string | null) => set({ account: a }),
   realEstateContract: null,
   setRealEstateContract: (c: Contract | null) => set({ realEstateContract: c }),
+  realEstateSigner: null,
+  setRealEstateSigner: (c: BaseContract | null) => set({ realEstateSigner: c }),
   escrowContract: null,
   setEscrowContract: (c: Contract | null) => set({ escrowContract: c }),
   nftProperty: null,

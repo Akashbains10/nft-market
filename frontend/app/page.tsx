@@ -33,49 +33,38 @@ export default function Home() {
     setWalletConnected,
     setAccount,
     realEstateContract,
+    escrowContract,
     setRealEstateContract,
+    setRealEstateSigner,
     setEscrowContract,
   } = useNFTStore();
+  const [listedNFTs, setListedNFTs] = useState<PropertyNFT[]>([]);
   const [mounted, setMounted] = useState(false);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
-  const [nftProperties, setNftProperties] = useState<PropertyNFT[]>([]);
+  // const [nftProperties, setNftProperties] = useState<PropertyNFT[]>([]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Switch to Hardhat Chain
-  // const switchToHardhatNetwork = async (provider: any) => {
-  //   try {
-  //     await provider.request({
-  //       method: "wallet_switchEthereumChain",
-  //       params: [{ chainId: "0x7A69" }],
-  //     });
-  //   } catch (err) {
-  //     await provider.request({
-  //       method: "wallet_addEthereumChain",
-  //       params: [
-  //         {
-  //           chainId: "0x7A69",
-  //           chainName: "Hardhat Localhost",
-  //           rpcUrls: ["http://127.0.0.1:8545"],
-  //           nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-  //         },
-  //       ],
-  //     });
-  //   }
-  // };
-
   // Load Contract Instances
-  const loadContracts = (signer: any) => {
-    const realEstate = new ethers.Contract(
+  const loadContracts = async (provider: BrowserProvider, signer: any) => {
+    const readContract = new ethers.Contract(
       realEstateAddress,
       RealEstate.abi,
-      signer
+      provider // READ ONLY
     );
+
+    const writeContract = new ethers.Contract(
+      realEstateAddress,
+      RealEstate.abi,
+      signer // WRITE
+    );
+
     const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
 
-    setRealEstateContract(realEstate);
+    setRealEstateContract(readContract);
+    setRealEstateSigner(writeContract);
     setEscrowContract(escrow);
   };
 
@@ -98,7 +87,8 @@ export default function Home() {
         }
 
         // await switchToHardhatNetwork(metamask);
-        loadContracts(web3);
+        const signer = await web3.getSigner();
+        loadContracts(web3, signer);
       } catch (err: any) {
         if (err.code === "ACTION_REJECTED") {
           console.log("Connection request rejected or MetaMask locked.");
@@ -129,7 +119,7 @@ export default function Home() {
       // Refresh signer + contracts
       if (provider) {
         const signer = await provider.getSigner();
-        loadContracts(signer);
+        loadContracts(provider, signer);
       }
     };
 
@@ -147,29 +137,74 @@ export default function Home() {
   }, [provider]);
 
   // 🔹 Fetch NFT Properties
-  useEffect(() => {
-    if (!realEstateContract) return;
+  // useEffect(() => {
+  //   if (!realEstateContract) return;
 
-    const fetchNFTs = async () => {
-      try {
-        const properties = [];
-        const totalSupply = await realEstateContract.totalSupply();
+  //   const fetchNFTs = async () => {
+  //     try {
+  //       const properties = [];
+  //       const totalSupply = await realEstateContract.totalSupply();
+  //       console.log({ totalSupply });
 
-        for (let i = 1; i <= totalSupply; i++) {
-          const nftURI = await realEstateContract.tokenURI(i);
-          const res = await fetch(nftURI);
-          const metadata = await res.json();
-          properties.push(metadata);
-        }
+  //       for (let i = 1; i <= totalSupply; i++) {
+  //         const nftURI = await realEstateContract.tokenURI(i);
+  //         const res = await fetch(nftURI);
+  //         const metadata = await res.json();
+  //         const newMetadata = {
+  //           id: i,
+  //           ...metadata
+  //         }
+  //         properties.push(newMetadata);
+  //       }
+  //       setNftProperties(properties);
+  //     } catch (error) {
+  //       console.error("NFT Fetch Error:", error);
+  //     }
+  //   };
 
-        setNftProperties(properties);
-      } catch (error) {
-        console.error("NFT Fetch Error:", error);
+  //   fetchNFTs();
+  // }, [realEstateContract]);
+
+  const fetchListedProperties = async () => {
+    try {
+      if (!realEstateContract || !escrowContract) return;
+
+      const listedIds = await escrowContract.getListedIds();
+
+      const properties = [];
+
+      for (let id of listedIds) {
+        id = Number(id);
+
+        const tokenURI = await realEstateContract.tokenURI(id);
+        const cleanURI = tokenURI.replace(
+          "ipfs://",
+          "https://rose-quickest-tern-567.mypinata.cloud/ipfs/"
+        );
+
+        const metadataRes = await fetch(cleanURI);
+        const metadata = await metadataRes.json();
+
+        const listing = await escrowContract.listings(id);
+
+        properties.push({
+          id,
+          ...metadata,
+          isListed: true,
+          seller: listing.seller,
+          price: listing.price.toString(),
+        });
       }
-    };
 
-    fetchNFTs();
-  }, [realEstateContract]);
+      setListedNFTs(properties);
+    } catch (err) {
+      console.error("Marketplace Fetch Error: ", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchListedProperties();
+  }, [realEstateContract, escrowContract]);
 
   if (!mounted) return null;
 
@@ -193,7 +228,7 @@ export default function Home() {
               begin trading on the most secure NFT marketplace.
             </p>
           </div>
-          <NFTGrid properties={nftProperties} />
+          <NFTGrid properties={listedNFTs} />
         </main>
         <Footer />
       </div>

@@ -60,10 +60,10 @@ const realEstateAddress = addresses["localhost"].RealEstate;
               <Badge
                 variant="default"
                 className={`capitalize font-semibold text-sm px-4 py-2 whitespace-nowrap ${
-                  rarityColors[nft?.rarity as keyof typeof rarityColors]
+                  rarityColors[nft?.collection as keyof typeof rarityColors]
                 }`}
               >
-                {nft?.rarity ?? 'Epic'}
+                {nft?.collection ?? 'Epic'}
               </Badge>
             </div>
 
@@ -100,12 +100,11 @@ const realEstateAddress = addresses["localhost"].RealEstate;
             <div className="space-y-2">
               <div className="flex items-baseline gap-3">
                 <span className="text-5xl font-bold text-foreground">
-                  {extractPrice(nft)} ETH
+                  {/* {extractPrice(nft)} ETH */}
+                  {nft?.priceETH}
+                   ETH
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground font-medium">
-                3196.35 USD
-              </p>
             </div>
           </div>
         </div>
@@ -126,7 +125,7 @@ const realEstateAddress = addresses["localhost"].RealEstate;
                 className="bg-gradient-to-br from-primary/5 to-accent/5 hover:from-primary/10 hover:to-accent/10 rounded-lg p-5 border border-primary/10 hover:border-primary/20 transition-all duration-300 group cursor-pointer"
               >
                 <p className="text-xs text-muted-foreground font-semibold mb-2 uppercase tracking-wider">
-                  {prop?.trait_type}
+                  {prop?.traitType}
                 </p>
                 <p className="font-semibold text-foreground text-base group-hover:text-primary transition-colors">
                   {prop.value}
@@ -206,7 +205,7 @@ const realEstateAddress = addresses["localhost"].RealEstate;
                 Contract Address
               </span>
               <button
-                onClick={() => handleCopy('0x1234567890123456789012345678901234567890', 'contract')}
+                onClick={() => handleCopy(realEstateAddress, 'contract')}
                 className="flex items-center gap-2 group/copy"
                 aria-label="Copy contract address"
               >
