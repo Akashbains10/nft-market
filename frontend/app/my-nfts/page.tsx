@@ -12,6 +12,11 @@ import {
 import { mockNFTs } from "@/lib/mock-data";
 import useNFTStore from "@/store/useNFTStore";
 import { FilterType, OwnedNFT } from "@/types/property";
+import { NFTCardSkeleton } from "@/components/dashboard/nft-card-skeleton";
+import { EmptyState } from "@/components/dashboard/empty-state";
+import toast from "react-hot-toast";
+import { ethers } from "ethers";
+import address from '@/address.json';
 
 interface DashboardNFT {
   id: string;
@@ -35,16 +40,20 @@ const dashboardNFTs: DashboardNFT[] = mockNFTs.map((nft) => ({
 }));
 
 export default function DashboardPage() {
-  const { account, realEstateContract, escrowContract } = useNFTStore();
+  const { account, realEstateContract, escrowContract, realEstateSigner } =
+    useNFTStore();
 
   const [myNFTs, setMyNFTs] = useState<OwnedNFT[]>([]);
   const [listedIds, setListedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [listedNFTs, setListedNFTs] = useState<Record<string, boolean>>({
     "1": true,
     "3": true,
   });
+
+  const escrowAddress = address['localhost'].Escrow;
 
   const activeListingCount = useMemo(() => {
     if (!myNFTs?.length || !listedIds?.length) return 0;
@@ -85,24 +94,23 @@ export default function DashboardPage() {
       .toFixed(2),
   };
 
-  const handleList = (id: string) => {
-    setListedNFTs((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const fetchMyProperties = async () => {
     try {
       if (!realEstateContract || !escrowContract || !account) return;
-
+      setIsLoading(true);
       const owned = [];
       const totalSupply = await realEstateContract.totalSupply();
+      console.log({ totalSupply });
+
       const allListings = await escrowContract.getListedIds();
       setListedIds(allListings);
 
       for (let i = 1; i <= Number(totalSupply); i++) {
         const owner = await realEstateContract.ownerOf(i);
-
         if (owner.toLowerCase() === account.toLowerCase()) {
           const tokenURI = await realEstateContract.tokenURI(i);
+          console.log({ owner });
+          console.log({ tokenURI });
           const metadataRes = await fetch(tokenURI);
           const metadata = await metadataRes.json();
 
@@ -121,6 +129,38 @@ export default function DashboardPage() {
       setMyNFTs(owned);
     } catch (err) {
       console.error("My NFTs Fetch Error: ", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const approveEscrowForListing = async (nftId: string) => {
+    debugger;
+    if (realEstateSigner && realEstateSigner?.approve) {
+      const tx = await realEstateSigner?.approve(escrowAddress, nftId);
+      await tx.wait();
+    } else {
+      toast.error("RealEstate Signer is not initialized");
+      return;
+    }
+  };
+
+  const listProperty = async (nftId: string, price: string) => {
+    debugger;
+    if (!escrowContract) {
+      toast.error("Failed to list property! Contract is not initialized");
+      return;
+    }
+
+    try {
+      await approveEscrowForListing(nftId);
+      const priceWei = ethers.parseEther(price.toString());
+      const tx = await escrowContract.listProperty(nftId, priceWei);
+      await tx.wait();
+      toast.success("Property listed successfully");
+    } catch (error) {
+      debugger;
+      console.log("Error in list property:", error);
     }
   };
 
@@ -276,91 +316,83 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* NFT Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredNFTs.map((nft) => (
-            <div
-              key={nft?.id}
-              className="group relative overflow-hidden rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:shadow-primary/20"
-            >
-              {/* Image Container */}
-              <div className="relative h-64 overflow-hidden bg-muted">
-                <img
-                  src={nft?.mediaUrl || "/placeholder.svg"}
-                  alt={nft?.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
-                {/* Status Badge */}
-                <div className="absolute top-4 right-4">
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
-                      nft?.status === "listed"
-                        ? "bg-emerald-500/90 text-white"
-                        : nft?.status === "sold"
-                        ? "bg-purple-500/90 text-white"
-                        : "bg-gray-500/90 text-white"
-                    }`}
-                  >
-                    {nft?.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-5">
-                {/* Title and Collection */}
-                <h3 className="text-lg font-semibold text-foreground mb-1 line-clamp-1">
-                  {nft?.name}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {nft?.collection}
-                </p>
-
-                {/* Details */}
-                <div className="grid grid-cols-2 gap-3 mb-4 pb-4 border-b border-border">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Price</p>
-                    <p className="text-sm font-semibold text-foreground">
-                      {nft?.priceETH} ETH
-                    </p>
-                  </div>
-                  {/* <div>
-                    <p className="text-xs text-muted-foreground mb-1">
-                      USD Value
-                    </p>
-                    <p className="text-sm font-semibold text-foreground">
-                      {nft?.priceUSD}
-                    </p>
-                  </div> */}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleList(nft?.id)}
-                    className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:shadow-lg hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-200"
-                  >
-                    {listedNFTs[nft?.id] ? "Cancel Listing" : "List Property"}
-                  </button>
-                  <button className="flex-1 px-4 py-2.5 bg-secondary text-secondary-foreground font-medium rounded-lg hover:bg-secondary/80 hover:shadow-lg active:scale-95 transition-all duration-200 border border-border">
-                    View Details
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
         {/* Empty State */}
-        {filteredNFTs.length === 0 && (
-          <div className="py-16 text-center">
-            <div className="mb-4 text-5xl">🔍</div>
-            <h3 className="text-2xl font-bold text-foreground mb-2">
-              No NFTs found
-            </h3>
-            <p className="text-muted-foreground">
-              Try adjusting your search or filters
-            </p>
+        {!isLoading && filteredNFTs.length === 0 && <EmptyState />}
+
+        {isLoading ? (
+          <NFTCardSkeleton />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredNFTs.map((nft) => {
+              const isListed = listedIds.includes(nft?.id);
+              return (
+                <div
+                  key={nft?.id}
+                  className="group relative overflow-hidden rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:shadow-primary/20"
+                >
+                  {/* Image Container */}
+                  <div className="relative h-64 overflow-hidden bg-muted">
+                    <img
+                      src={nft?.mediaUrl || "/placeholder.svg"}
+                      alt={nft?.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                    {/* Status Badge */}
+                    <div className="absolute top-4 right-4">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
+                          nft?.status === "listed"
+                            ? "bg-emerald-500/90 text-white"
+                            : nft?.status === "sold"
+                            ? "bg-purple-500/90 text-white"
+                            : "bg-gray-500/90 text-white"
+                        }`}
+                      >
+                        {nft?.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-5">
+                    {/* Title and Collection */}
+                    <h3 className="text-lg font-semibold text-foreground mb-1 line-clamp-1">
+                      {nft?.name}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {nft?.collection}
+                    </p>
+
+                    {/* Details */}
+                    <div className="grid grid-cols-2 gap-3 mb-4 pb-4 border-b border-border">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Price
+                        </p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {nft?.priceETH} ETH
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() =>
+                          listProperty(nft?.id, nft?.priceETH as string)
+                        }
+                        className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:shadow-lg hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-200"
+                      >
+                        {isListed ? "Cancel Listing" : "List Property"}
+                      </button>
+                      <button className="flex-1 px-4 py-2.5 bg-secondary text-secondary-foreground font-medium rounded-lg hover:bg-secondary/80 hover:shadow-lg active:scale-95 transition-all duration-200 border border-border">
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

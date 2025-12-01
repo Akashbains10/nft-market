@@ -16,8 +16,8 @@ import useNFTStore from "@/store/useNFTStore";
 import { Contract, ethers, Signer } from "ethers";
 import addresses from "@/address.json";
 import Escrow from "@/contracts/Escrow.json";
-import { get } from "http";
-import { getMetaMaskProvider } from "@/app/page";
+import { getMetaMaskProvider } from "@/app/ContractWrapper";
+import toast from "react-hot-toast";
 
 interface BuyModalProps {
   nft: PropertyNFT;
@@ -32,6 +32,7 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
     "confirm" | "processing" | "success" | "error"
   >("confirm");
   const [error, setError] = useState<string | null>(null);
+  const {escrowContract} = useNFTStore();
 
   const handleConfirmPurchases = async () => {
     setStep("processing");
@@ -65,13 +66,14 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
   };
 
   const depositEarnest = async (
-    signer: Signer,
     nftId: string,
     amount: number
   ) => {
-    console.log("Depositing Earnest:", amount);
-    const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
-    const tx = await escrow.depositEarnest(nftId, {
+    debugger;
+
+    if (!escrowContract) return;
+    // const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
+    const tx = await escrowContract.depositEarnest(nftId, {
       value: amount,
     });
 
@@ -79,59 +81,54 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
     return tx.hash;
   };
 
-  // const sendLoanAmount = async (signer: Signer, loanAmount: bigint) => {
-  //   console.log("Sending Loan Amount:", ethers.formatEther(loanAmount), "ETH");
-  //   console.log("Sending Loan Amount in wei:", loanAmount);
-  //   const tx = await signer.sendTransaction({
-  //     to: escrowAddress,
-  //     value: loanAmount,
-  //   });
-  //   await tx.wait();
-  //   return tx.hash;
-  // };
-
-  const finalizeSale = async (nftId: string, escrow: Contract, signer: Signer) => {
-    console.log("Purchase amount:", await escrow.purchaseAmount(nftId));
+  const finalizeSale = async (nftId: string) => {
     // 🔍 CHECK BALANCE BEFORE FINALIZE
-    const provider = signer.provider;
-    if (!provider) {
-      alert("Signer has no provider");
-      return
-    }
-    const contractBal = await provider.getBalance(escrowAddress);
-    console.log(
-      "ESCROW BALANCE BEFORE FINALIZE:",
-      contractBal
-    );
+    // const provider = signer.provider;
+    // if (!provider) {
+    //   alert("Signer has no provider");
+    //   return
+    // }
+    // const contractBal = await provider.getBalance(escrowAddress);
+    // console.log(
+    //   "ESCROW BALANCE BEFORE FINALIZE:",
+    //   contractBal
+    // );
+    debugger;
 
-    const tx = await escrow.finalizeSale(nftId);
+    if (!escrowContract) return;
+    const tx = await escrowContract.finalizeSale(nftId);
     await tx.wait();
     return tx.hash;
   };
 
   const handleConfirmPurchase = async () => {
+    debugger;
     if (!window.ethereum) {
-      alert("Please install MetaMask to proceed with the purchase.");
+      toast.error("Please install MetaMask to proceed with the purchase.");
       return;
     }
-    const metamask = getMetaMaskProvider();
-    const provider = new ethers.BrowserProvider(metamask);
-    const signer = await provider.getSigner();
-    const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
-    const purchaseAmount = await escrow.purchaseAmount(nft.id);
+    if (!escrowContract) {
+      console.log('Escrow Contract is not initalized')
+      return;
+    }
+    // const metamask = getMetaMaskProvider();
+    // const provider = new ethers.BrowserProvider(metamask);
+    // const signer = await provider.getSigner();
+    // const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
+    const purchaseAmount = await escrowContract.purchaseAmount(nft.id);
 
     //buyer pay the deposit earnest
-    await depositEarnest(signer, nft.id, purchaseAmount);
+    await depositEarnest(nft.id, purchaseAmount);
 
     //finalize the sale and transfer the ownership
-    await finalizeSale(nft?.id, escrow, signer);
+    await finalizeSale(nft?.id);
     console.log("NFT purchased successfully");
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+        <DialogHeader>  
           <DialogTitle className="text-2xl">
             {step === "confirm" && "Confirm Purchase"}
             {step === "processing" && "Processing Transaction"}
@@ -166,30 +163,28 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
                     Price
                   </span>
                   <span className="font-semibold text-primary text-lg">
-                    {extractPrice(nft)} ETH
+                    {nft?.priceETH} ETH
                   </span>
                 </div>
                 <div className="h-px bg-border/40" />
-                <div className="flex justify-between items-center">
+                {/* <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground font-medium">
                     Gas Fee (Est.)
                   </span>
                   <span className="font-semibold text-foreground">
                     0.05 ETH
                   </span>
-                </div>
-                <div className="h-px bg-border/40" />
+                </div> */}
+                {/* <div className="h-px bg-border/40" />
                 <div className="flex justify-between items-center pt-2">
                   <span className="text-sm text-muted-foreground font-semibold">
                     Total
                   </span>
                   <span className="font-bold text-primary text-lg">
-                    {(parseFloat(extractPrice(nft) as string) + 0.05).toFixed(
-                      2
-                    )}{" "}
+                    {nft?.priceETH}{" "}
                     ETH
                   </span>
-                </div>
+                </div> */}
               </div>
 
               <div className="space-y-3 pt-2">

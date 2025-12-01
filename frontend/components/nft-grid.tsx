@@ -97,7 +97,6 @@ export default function NFTGrid({
                             Current Price
                           </p>
                           <p className="text-xl md:text-2xl font-bold text-primary">
-                            {/* {extractPrice(nft)} */}
                             {nft?.priceETH}
                             <span className="text-xs text-muted-foreground ml-1 font-normal">
                               ETH

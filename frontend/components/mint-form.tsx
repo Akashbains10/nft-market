@@ -29,8 +29,9 @@ export default function MintForm() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const isDetailsValid = () => {
-    return formData.name.trim() && formData.description.trim();
+  const isDetailsValid = (): boolean => {
+    const isValid = formData.name.trim() && formData.description.trim();
+    return !!isValid;
   };
 
   const isPricingValid = () => !!formData.priceETH;
@@ -56,11 +57,11 @@ export default function MintForm() {
 
   const uploadFileToIPFS = async (file: File): Promise<string> => {
     const endpoint = "/pinning/pinFileToIPFS";
-    const GATEWAY_URL=process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
+    const GATEWAY_URL = process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
     const formData = new FormData();
     formData.append("file", file);
     const response = await axios.post(endpoint, formData);
-    return `${GATEWAY_URL}/${response.data.IpfsHash}`
+    return `${GATEWAY_URL}/${response.data.IpfsHash}`;
   };
 
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,28 +161,46 @@ export default function MintForm() {
     }
   };
 
-  // const uploadMetadataToIPFS = async (metadata: FormData): Promise<string> => {
-  //   const endpoint = "/pinning/pinJSONToIPFS";
-  //   const formData = new FormData();
-  //   formData.append("pinataMetadata", JSON.stringify(metadata))
-  //   const response = await axios.post(endpoint, metadata);
-  //   return `https://gateway.pinata.cloud/ipfs/${response.data.IpfsHash}`;
-  // };
-
   const uploadMetadataToIPFS = async (metadata: any): Promise<string> => {
-    const endpoint = "/pinning/pinJSONToIPFS";
-    const GATEWAY_URL=process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
-    const response = await axios.post(endpoint, {
-      pinataMetadata: {
-        name: metadata?.name ?? Date.now()
-      },
-      pinataContent: metadata,
+    try {
+      const endpoint = "/pinning/pinJSONToIPFS";
+      const GATEWAY_URL = process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
+      const response = await axios.post(endpoint, {
+        pinataMetadata: {
+          name: metadata?.name ?? Date.now(),
+        },
+        pinataContent: metadata,
+      });
+      return `${GATEWAY_URL}/${response.data.IpfsHash}`;
+    } catch (error: any) {
+      console.error("Error uploading metadata to IPFS:", error);
+
+      const msg =
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to upload metadata to IPFS.";
+
+      throw new Error(msg);
+    }
+  };
+
+  const afterSuccess = () => {
+    toast.success("NFT minted successfully!");
+    setFormData({
+      name: "",
+      description: "",
+      collection: "",
+      mediaUrl: "",
+      attributes: [],
+      priceETH: "",
+      mediaPreview: "",
     });
-    return `${GATEWAY_URL}/${response.data.IpfsHash}`;
+    setCurrentStep("details");
   };
 
   const handleMintNFT = async () => {
-    if (!isPricingValid()) {
+    if (!realEstateSigner) {
+      toast.error("RealEstate contract is not initialized");
       return;
     }
     try {
@@ -189,31 +208,25 @@ export default function MintForm() {
       const { mediaPreview, ...metadata } = formData;
       const ipfsURL = await uploadMetadataToIPFS(metadata);
 
-      // 2. Mint NFT using RealEstate smart contract
-      if (realEstateSigner) {
-        const tx = await realEstateSigner.mintProperty(ipfsURL);
+      if (realEstateSigner.mintProperty) {
+        // 2. Mint NFT using RealEstate smart contract
+        const tx = await realEstateSigner?.mintProperty(ipfsURL);
         const receipt = await tx.wait();
-        console.log("Minted! TxHash:", receipt.hash);
+
+        if (receipt?.status === 1) {
+          console.log("Minted! TxHash:", receipt.hash);
+          afterSuccess();
+        } else {
+          toast.error("Failed to mint NFT");
+        }
       }
-      toast.success("NFT minted successfully!");
-      setFormData({
-        name: "",
-        description: "",
-        collection: "",
-        mediaUrl: "",
-        attributes: [],
-        priceETH: "",
-        mediaPreview: "",
-      });
-      setCurrentStep("details");
     } catch (error) {
       toast.error("Failed to mint NFT. Please try again.");
-      console.log("Error in minting:", error)
+      console.log("Error in minting:", error);
     } finally {
       setIsMinting(false);
     }
   };
-
 
   return (
     <div className="space-y-8">

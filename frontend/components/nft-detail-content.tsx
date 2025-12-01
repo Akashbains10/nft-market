@@ -1,17 +1,17 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Heart, Share2, Copy, Check, ExternalLink } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import BuyNFTModal from './buy-nft-modal'
-import { PropertyNFT } from '@/types/property'
-import { extractPrice } from './nft-grid';
-import addresses from '@/address.json';
+import { useEffect, useState } from "react";
+import { Heart, Share2, Copy, Check, ExternalLink } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import BuyNFTModal from "./buy-nft-modal";
+import { PropertyNFT } from "@/types/property";
+import addresses from "@/address.json";
+import useNFTStore from "@/store/useNFTStore";
 
 interface NFTDetailContentProps {
-  nft: PropertyNFT
-  isLiked?: boolean
-  onLikeChange?: (liked: boolean) => void
+  nft: PropertyNFT;
+  isLiked?: boolean;
+  onLikeChange?: (liked: boolean) => void;
 }
 
 export default function NFTDetailContent({
@@ -19,31 +19,43 @@ export default function NFTDetailContent({
   isLiked = false,
   onLikeChange,
 }: NFTDetailContentProps) {
+  const realEstateAddress = addresses["localhost"].RealEstate;
 
-const realEstateAddress = addresses["localhost"].RealEstate;
-
-  const [liked, setLiked] = useState(isLiked)
-  const [copiedField, setCopiedField] = useState<string | null>(null)
-  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false)
+  const { account, escrowContract } = useNFTStore();
+  const [liked, setLiked] = useState(isLiked);
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [isPurchaseDisabled, setIsPurchaseDisabled] = useState<boolean>(false);
 
   const handleLike = () => {
-    const newLiked = !liked
-    setLiked(newLiked)
-    onLikeChange?.(newLiked)
-  }
+    const newLiked = !liked;
+    setLiked(newLiked);
+    onLikeChange?.(newLiked);
+  };
 
   const handleCopy = (text: string, field: string) => {
-    navigator.clipboard.writeText(text)
-    setCopiedField(field)
-    setTimeout(() => setCopiedField(null), 2000)
-  }
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   const rarityColors = {
-    legendary: 'bg-gradient-to-r from-amber-500 to-amber-600 text-white',
-    epic: 'bg-gradient-to-r from-purple-500 to-purple-600 text-white',
-    rare: 'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
-    common: 'bg-gradient-to-r from-gray-400 to-gray-500 text-white',
-  }
+    legendary: "bg-gradient-to-r from-amber-500 to-amber-600 text-white",
+    epic: "bg-gradient-to-r from-purple-500 to-purple-600 text-white",
+    rare: "bg-gradient-to-r from-blue-500 to-blue-600 text-white",
+    common: "bg-gradient-to-r from-gray-400 to-gray-500 text-white",
+  };
+
+  useEffect(() => {
+    const handlePurchaseBtn = async () => {
+      if (!escrowContract || !nft?.id) return;
+
+      const sellerOfNFT = await escrowContract.sellerOf(nft.id);
+      setIsPurchaseDisabled(account === sellerOfNFT);
+    };
+
+    handlePurchaseBtn();
+  }, [escrowContract, nft?.id, account]);
 
   return (
     <>
@@ -63,7 +75,7 @@ const realEstateAddress = addresses["localhost"].RealEstate;
                   rarityColors[nft?.collection as keyof typeof rarityColors]
                 }`}
               >
-                {nft?.collection ?? 'Epic'}
+                {nft?.collection ?? "Epic"}
               </Badge>
             </div>
 
@@ -77,11 +89,11 @@ const realEstateAddress = addresses["localhost"].RealEstate;
                 <Heart
                   className={`w-5 h-5 transition-all duration-300 ${
                     liked
-                      ? 'fill-red-500 text-red-500 scale-110'
-                      : 'text-muted-foreground group-hover/btn:text-red-400'
+                      ? "fill-red-500 text-red-500 scale-110"
+                      : "text-muted-foreground group-hover/btn:text-red-400"
                   }`}
                 />
-                <span>{liked ? 'Liked' : 'Like'}</span>
+                <span>{liked ? "Liked" : "Like"}</span>
               </button>
               <button
                 className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-primary/5 to-accent/5 hover:from-primary/10 hover:to-accent/10 text-foreground px-4 py-3 rounded-lg transition-all duration-300 active:scale-95 group/btn font-semibold border border-primary/20 hover:border-primary/40"
@@ -102,7 +114,7 @@ const realEstateAddress = addresses["localhost"].RealEstate;
                 <span className="text-5xl font-bold text-foreground">
                   {/* {extractPrice(nft)} ETH */}
                   {nft?.priceETH}
-                   ETH
+                  ETH
                 </span>
               </div>
             </div>
@@ -110,7 +122,9 @@ const realEstateAddress = addresses["localhost"].RealEstate;
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">About This NFT</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            About This NFT
+          </h2>
           <p className="text-base text-muted-foreground leading-relaxed text-pretty font-light">
             {nft.description}
           </p>
@@ -154,11 +168,11 @@ const realEstateAddress = addresses["localhost"].RealEstate;
                   <ExternalLink className="w-3 h-3 flex-shrink-0" />
                 </a>
                 <button
-                  onClick={() => handleCopy(nft?.creator, 'creator')}
+                  onClick={() => handleCopy(nft?.creator, "creator")}
                   className="p-2 hover:bg-primary/10 rounded transition-colors flex-shrink-0"
                   aria-label="Copy creator address"
                 >
-                  {copiedField === 'creator' ? (
+                  {copiedField === "creator" ? (
                     <Check className="w-4 h-4 text-green-500" />
                   ) : (
                     <Copy className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
@@ -182,11 +196,11 @@ const realEstateAddress = addresses["localhost"].RealEstate;
                   <ExternalLink className="w-3 h-3 flex-shrink-0" />
                 </a>
                 <button
-                  onClick={() => handleCopy(nft?.owner, 'owner')}
+                  onClick={() => handleCopy(nft?.owner, "owner")}
                   className="p-2 hover:bg-primary/10 rounded transition-colors flex-shrink-0"
                   aria-label="Copy owner address"
                 >
-                  {copiedField === 'owner' ? (
+                  {copiedField === "owner" ? (
                     <Check className="w-4 h-4 text-green-500" />
                   ) : (
                     <Copy className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
@@ -198,21 +212,24 @@ const realEstateAddress = addresses["localhost"].RealEstate;
         </div>
 
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-foreground">Blockchain Details</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            Blockchain Details
+          </h2>
           <div className="space-y-3">
             <div className="flex justify-between items-center bg-gradient-to-r from-primary/5 to-accent/5 px-5 py-4 rounded-lg border border-primary/10 hover:border-primary/20 transition-all duration-300">
               <span className="text-sm font-semibold text-muted-foreground">
                 Contract Address
               </span>
               <button
-                onClick={() => handleCopy(realEstateAddress, 'contract')}
+                onClick={() => handleCopy(realEstateAddress, "contract")}
                 className="flex items-center gap-2 group/copy"
                 aria-label="Copy contract address"
               >
                 <code className="text-xs font-mono text-primary font-semibold group-hover/copy:text-accent transition-colors">
-                  {realEstateAddress.slice(0, 6)}...{realEstateAddress.slice(-4)}
+                  {realEstateAddress.slice(0, 6)}...
+                  {realEstateAddress.slice(-4)}
                 </code>
-                {copiedField === 'contract' ? (
+                {copiedField === "contract" ? (
                   <Check className="w-4 h-4 text-green-500" />
                 ) : (
                   <Copy className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
@@ -225,14 +242,14 @@ const realEstateAddress = addresses["localhost"].RealEstate;
                 Token ID
               </span>
               <button
-                onClick={() => handleCopy(nft.id, 'tokenId')}
+                onClick={() => handleCopy(nft.id, "tokenId")}
                 className="flex items-center gap-2 group/copy"
                 aria-label="Copy token ID"
               >
                 <code className="text-xs font-mono text-primary font-semibold group-hover/copy:text-accent transition-colors">
                   #{nft.id}
                 </code>
-                {copiedField === 'tokenId' ? (
+                {copiedField === "tokenId" ? (
                   <Check className="w-4 h-4 text-green-500" />
                 ) : (
                   <Copy className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
@@ -251,9 +268,11 @@ const realEstateAddress = addresses["localhost"].RealEstate;
           </div>
         </div>
 
-        <button 
+        <button
           onClick={() => setIsBuyModalOpen(true)}
-          className="w-full bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 active:scale-95 text-primary-foreground px-6 py-4 rounded-lg font-semibold shadow-md hover:shadow-xl transition-all duration-300 text-base"
+          disabled={isPurchaseDisabled}
+          title={isPurchaseDisabled ? `You can't buy your own property` : ''}
+          className="w-full bg-gradient-to-r from-primary to-accent hov er:from-primary/90 hover:to-accent/90 active:scale-95 text-primary-foreground px-6 py-4 rounded-lg font-semibold shadow-md hover:shadow-xl transition-all duration-300 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:from-primary disabled:hover:to-accent disabled:active:scale-100"
         >
           Purchase NFT
         </button>
@@ -265,5 +284,5 @@ const realEstateAddress = addresses["localhost"].RealEstate;
         nft={nft}
       />
     </>
-  )
+  );
 }
