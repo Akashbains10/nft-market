@@ -27,15 +27,14 @@ export default function NFTDetailPage() {
 
     const fetchNFTdetails = async () => {
       if (!realEstateContract) {
-        console.log("RealEstate contract is not initialized");
-        return;
+        throw new Error("RealEstate contract is not initialized");
       }
       try {
         setLoading(true);
         const tokenURI = await realEstateContract.tokenURI(id);
         const metadataRes = await fetch(tokenURI);
         const metadata = await metadataRes.json();
-        setNFTDetails(metadata);
+        setNFTDetails({id, ...metadata});
       } catch (error: any) {
         const msg =
           error?.response?.data?.error ||

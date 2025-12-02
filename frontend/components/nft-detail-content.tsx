@@ -242,7 +242,7 @@ export default function NFTDetailContent({
                 Token ID
               </span>
               <button
-                onClick={() => handleCopy(nft.id, "tokenId")}
+                onClick={() => handleCopy(nft.id?.toString(), "tokenId")}
                 className="flex items-center gap-2 group/copy"
                 aria-label="Copy token ID"
               >

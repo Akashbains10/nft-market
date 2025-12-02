@@ -1,23 +1,17 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import {
-  Search,
-  Plus,
-  TrendingUp,
-  List,
-  CheckCircle,
-  Package,
-} from "lucide-react";
 import { mockNFTs } from "@/lib/mock-data";
 import useNFTStore from "@/store/useNFTStore";
 import { FilterType, OwnedNFT } from "@/types/property";
-import { NFTCardSkeleton } from "@/components/dashboard/nft-card-skeleton";
-import { EmptyState } from "@/components/dashboard/empty-state";
 import toast from "react-hot-toast";
 import { ethers } from "ethers";
 import address from "@/address.json";
-import { useRouter } from "next/navigation";
+import { PortfolioHeader } from "./components/portfolio-header";
+import { MetricsSection } from "./components/metrics-section";
+import { SearchBar } from "./components/search-bar";
+import { FilterPills } from "./components/filter-pills";
+import { NFTGrid } from "./components/nft-grid";
 
 interface DashboardNFT {
   id: string;
@@ -49,16 +43,11 @@ export default function DashboardPage() {
     setNftProperty,
   } = useNFTStore();
 
-  const router = useRouter();
   const [myNFTs, setMyNFTs] = useState<OwnedNFT[]>([]);
-  const [listedIds, setListedIds] = useState<string[]>([]);
+  const [listedIds, setListedIds] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
-  const [listedNFTs, setListedNFTs] = useState<Record<string, boolean>>({
-    "1": true,
-    "3": true,
-  });
 
   const escrowAddress = address["localhost"].Escrow;
 
@@ -91,30 +80,31 @@ export default function DashboardPage() {
     return result;
   }, [searchQuery, activeFilter, myNFTs]);
 
-  const metrics = {
-    total: dashboardNFTs.length,
-    active: dashboardNFTs.filter((n) => listedNFTs[n.id]).length,
-    sold: dashboardNFTs.filter((n) => n.status === "sold").length,
-    value: dashboardNFTs
-      .filter((n) => listedNFTs[n.id])
-      .reduce((sum, n) => sum + Number.parseFloat(n.price), 0)
-      .toFixed(2),
-  };
-
   const fetchMyProperties = async () => {
     try {
       if (!realEstateContract || !escrowContract || !account) return;
       setIsLoading(true);
+
       const owned = [];
       const totalSupply = await realEstateContract.totalSupply();
       console.log({ totalSupply });
 
-      const allListings = await escrowContract.getListedIds();
+      const allListings = (await escrowContract.getListedIds()).map(Number);
+      const purchasedNFTs = (
+        await escrowContract.getPurchasedNfts(account)
+      ).map(Number);
+      const soldNFTs = (await escrowContract.getSoldNfts(account)).map(Number);
       setListedIds(allListings);
 
       for (let i = 1; i <= Number(totalSupply); i++) {
-        const owner = await realEstateContract.ownerOf(i);
-        if (owner.toLowerCase() === account.toLowerCase()) {
+        const sellerOfNFT = await escrowContract.sellerOf(i);
+        const contractOwner = await realEstateContract.ownerOf(i);
+        const isListed = allListings.includes(i);
+
+        if (
+          (!isListed && contractOwner.toLowerCase() === account.toLowerCase()) ||
+          (isListed && sellerOfNFT.toLowerCase() === account.toLowerCase())
+        ) {
           const tokenURI = await realEstateContract.tokenURI(i);
           const metadataRes = await fetch(tokenURI);
           const metadata = await metadataRes.json();
@@ -123,10 +113,18 @@ export default function DashboardPage() {
             ? Array.from(allListings).find((x) => x === i)
             : false;
 
+          const status = isListed
+            ? "listed"
+            : purchasedNFTs.includes(i)
+            ? "purchased"
+            : soldNFTs.includes(i)
+            ? "sold"
+            : "unlisted";
+
           owned.push({
             id: i,
             ...metadata,
-            status: isListed ? "listed" : "unlisted",
+            status
           });
         }
       }
@@ -170,239 +168,38 @@ export default function DashboardPage() {
     fetchMyProperties();
   }, [realEstateContract, escrowContract, account]);
 
+  const soldCount = dashboardNFTs.filter((n) => n.status === "sold").length;
+
   return (
     <main className="min-h-screen bg-background pt-8 pb-16">
       <div className="container mx-auto px-4 max-w-7xl">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-12">
-          <div>
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2">
-              Your Portfolio
-            </h1>
-            <p className="text-muted-foreground text-lg">
-              Manage and list your NFT collection
-            </p>
-          </div>
-          <a
-            href="/mint"
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-300"
-          >
-            <Plus size={20} />
-            Create NFT
-          </a>
-        </div>
+        <PortfolioHeader />
 
-        {/* Metrics Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {/* Total NFTs Card */}
-          <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border border-blue-200/20 dark:border-blue-800/30 p-6 hover:border-blue-300/40 dark:hover:border-blue-700/50 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-400/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="relative">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-muted-foreground">
-                  Total NFTs
-                </h3>
-                <div className="p-3 bg-blue-500/20 rounded-lg group-hover:scale-110 transition-transform duration-300">
-                  <Package size={20} className="text-blue-500" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold text-foreground">
-                {myNFTs?.length}
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                In your collection
-              </p>
-            </div>
-          </div>
+        <MetricsSection
+          totalNFTs={myNFTs?.length}
+          activeListingCount={activeListingCount}
+          soldCount={soldCount}
+          activeListedValue={activeListedValue}
+        />
 
-          {/* Active Listings Card */}
-          <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500/10 via-teal-500/5 to-transparent border border-teal-200/20 dark:border-teal-800/30 p-6 hover:border-teal-300/40 dark:hover:border-teal-700/50 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-400/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="relative">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-muted-foreground">
-                  Active Listings
-                </h3>
-                <div className="p-3 bg-teal-500/20 rounded-lg group-hover:scale-110 transition-transform duration-300">
-                  <List size={20} className="text-teal-500" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold text-foreground">
-                {activeListingCount}
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Currently listed
-              </p>
-            </div>
-          </div>
-
-          {/* Sold Card */}
-          <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent border border-purple-200/20 dark:border-purple-800/30 p-6 hover:border-purple-300/40 dark:hover:border-purple-700/50 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-400/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="relative">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-muted-foreground">
-                  Sold
-                </h3>
-                <div className="p-3 bg-purple-500/20 rounded-lg group-hover:scale-110 transition-transform duration-300">
-                  <CheckCircle size={20} className="text-purple-500" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold text-foreground">
-                {metrics.sold}
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Completed sales
-              </p>
-            </div>
-          </div>
-
-          {/* Active Value Card */}
-          <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-200/20 dark:border-emerald-800/30 p-6 hover:border-emerald-300/40 dark:hover:border-emerald-700/50 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="relative">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-muted-foreground">
-                  Active Value
-                </h3>
-                <div className="p-3 bg-emerald-500/20 rounded-lg group-hover:scale-110 transition-transform duration-300">
-                  <TrendingUp size={20} className="text-emerald-500" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold text-foreground">
-                {activeListedValue} ETH
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">Listed value</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Search and Filters Section */}
         <div className="mb-8 space-y-6">
-          {/* Search Bar */}
-          <div className="relative">
-            <Search
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
-              size={20}
-            />
-            <input
-              type="text"
-              placeholder="Search NFTs by name or collection..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300"
-            />
-          </div>
-
-          {/* Filter Pills */}
-          <div className="flex flex-wrap gap-3">
-            {(["all", "listed", "unlisted", "sold"] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setActiveFilter(filter)}
-                className={`px-4 py-2 rounded-full font-medium text-sm transition-all duration-300 capitalize ${
-                  activeFilter === filter
-                    ? "bg-primary text-primary-foreground shadow-lg"
-                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border hover:border-primary/50"
-                }`}
-              >
-                {filter === "all"
-                  ? "All NFTs"
-                  : filter === "listed"
-                  ? "Listed"
-                  : filter === "unlisted"
-                  ? "Unlisted"
-                  : "Sold"}
-              </button>
-            ))}
-          </div>
+          <SearchBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
+          <FilterPills
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+          />
         </div>
 
-        {/* Empty State */}
-        {!isLoading && filteredNFTs.length === 0 && <EmptyState />}
-
-        {isLoading ? (
-          <NFTCardSkeleton />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredNFTs.map((nft) => {
-              const isListed = listedIds.includes(nft?.id);
-              return (
-                <div
-                  key={nft?.id}
-                  className="group relative overflow-hidden rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:shadow-primary/20"
-                >
-                  {/* Image Container */}
-                  <div className="relative h-64 overflow-hidden bg-muted">
-                    <img
-                      src={nft?.mediaUrl || "/placeholder.svg"}
-                      alt={nft?.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                    {/* Status Badge */}
-                    <div className="absolute top-4 right-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
-                          nft?.status === "listed"
-                            ? "bg-emerald-500/90 text-white"
-                            : nft?.status === "sold"
-                            ? "bg-purple-500/90 text-white"
-                            : "bg-gray-500/90 text-white"
-                        }`}
-                      >
-                        {nft?.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-5">
-                    {/* Title and Collection */}
-                    <h3 className="text-lg font-semibold text-foreground mb-1 line-clamp-1">
-                      {nft?.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {nft?.collection}
-                    </p>
-
-                    {/* Details */}
-                    <div className="grid grid-cols-2 gap-3 mb-4 pb-4 border-b border-border">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">
-                          Price
-                        </p>
-                        <p className="text-sm font-semibold text-foreground">
-                          {nft?.priceETH} ETH
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() =>
-                          listProperty(nft?.id, nft?.priceETH as string)
-                        }
-                        className="flex-1 px-4 py-2.5 cursor-pointer bg-primary text-primary-foreground font-medium rounded-lg hover:shadow-lg hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-200"
-                      >
-                        {isListed ? "Cancel Listing" : "List Marketplace"}
-                      </button>
-                      <button
-                        className="flex-1 px-4 py-2.5 cursor-pointer bg-secondary text-secondary-foreground font-medium rounded-lg hover:bg-secondary/80 hover:shadow-lg active:scale-95 transition-all duration-200 border border-border"
-                        onClick={() => {
-                          setNftProperty(nft);
-                          router.push(`/nft/${nft?.id}`);
-                        }}
-                      >
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <NFTGrid
+          nfts={filteredNFTs}
+          listedIds={listedIds}
+          isLoading={isLoading}
+          onListClick={listProperty}
+          onSetNftProperty={setNftProperty}
+        />
       </div>
     </main>
   );

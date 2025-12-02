@@ -25,34 +25,12 @@ interface BuyModalProps {
   onClose: () => void;
 }
 
-const escrowAddress = addresses["localhost"].Escrow;
-
 export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
   const [step, setStep] = useState<
     "confirm" | "processing" | "success" | "error"
   >("confirm");
   const [error, setError] = useState<string | null>(null);
-  const {escrowContract} = useNFTStore();
-
-  const handleConfirmPurchases = async () => {
-    setStep("processing");
-
-    // Simulate blockchain transaction
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Simulate random success/failure
-      if (Math.random() > 0.3) {
-        setStep("success");
-      } else {
-        setError("Transaction failed. Insufficient gas fees.");
-        setStep("error");
-      }
-    } catch (err) {
-      setError("An error occurred during the transaction.");
-      setStep("error");
-    }
-  };
+  const { escrowContract } = useNFTStore();
 
   const handleClose = () => {
     setStep("confirm");
@@ -65,12 +43,7 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
     setError(null);
   };
 
-  const depositEarnest = async (
-    nftId: string,
-    amount: number
-  ) => {
-    debugger;
-
+  const depositEarnest = async (nftId: number, amount: number) => {
     if (!escrowContract) return;
     // const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
     const tx = await escrowContract.depositEarnest(nftId, {
@@ -81,7 +54,7 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
     return tx.hash;
   };
 
-  const finalizeSale = async (nftId: string) => {
+  const finalizeSale = async (nftId: number) => {
     // 🔍 CHECK BALANCE BEFORE FINALIZE
     // const provider = signer.provider;
     // if (!provider) {
@@ -93,7 +66,6 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
     //   "ESCROW BALANCE BEFORE FINALIZE:",
     //   contractBal
     // );
-    debugger;
 
     if (!escrowContract) return;
     const tx = await escrowContract.finalizeSale(nftId);
@@ -102,33 +74,40 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
   };
 
   const handleConfirmPurchase = async () => {
-    debugger;
-    if (!window.ethereum) {
-      toast.error("Please install MetaMask to proceed with the purchase.");
-      return;
-    }
-    if (!escrowContract) {
-      console.log('Escrow Contract is not initalized')
-      return;
-    }
-    // const metamask = getMetaMaskProvider();
-    // const provider = new ethers.BrowserProvider(metamask);
-    // const signer = await provider.getSigner();
-    // const escrow = new ethers.Contract(escrowAddress, Escrow.abi, signer);
-    const purchaseAmount = await escrowContract.purchaseAmount(nft.id);
+    try {
+      if (!window.ethereum) {
+        toast.error("Please install MetaMask to proceed with the purchase.");
+        return;
+      }
+      if (!escrowContract) {
+        toast.error("Escrow Contract is not initalized");
+        return;
+      }
 
-    //buyer pay the deposit earnest
-    await depositEarnest(nft.id, purchaseAmount);
+      const purchaseAmount = await escrowContract.purchaseAmount(nft.id);
 
-    //finalize the sale and transfer the ownership
-    await finalizeSale(nft?.id);
-    console.log("NFT purchased successfully");
+      //buyer pay the deposit earnest
+      await depositEarnest(nft.id, purchaseAmount);
+
+      //close the modal
+      onClose();
+
+      //finalize the sale and transfer the ownership
+      await finalizeSale(nft?.id);
+      toast.success("NFT purchased successfully");
+    } catch (error: any) {
+      const message =
+        error?.reason ||
+        error?.data?.message ||
+        "Purchase failed. Please try again.";
+      toast.error(message);
+    }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>  
+        <DialogHeader>
           <DialogTitle className="text-2xl">
             {step === "confirm" && "Confirm Purchase"}
             {step === "processing" && "Processing Transaction"}

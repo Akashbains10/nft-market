@@ -1,4 +1,4 @@
-export type FilterType = "all" | "listed" | "unlisted" | "sold";
+export type FilterType = "all" | "listed" | "unlisted" | "sold" | "purchased";
 
 export interface PropertyNFT {
   name: string;
@@ -6,7 +6,7 @@ export interface PropertyNFT {
   collection?: string;
   description: string;
   mediaUrl: string;
-  id: string;
+  id: number;
   attributes: Attribute[];
   priceETH?: string;
 }

@@ -148,7 +148,7 @@ contract Escrow {
         isListed[_nftId] = false;
         purchaseAmount[_nftId] = 0;
         buyer[_nftId] = address(0);
-        sellerOf[_nftId] = payable(address(0));
+        // sellerOf[_nftId] = payable(address(0));
         escrowDeposits[_nftId] = 0;
 
         _removeFromListed(_nftId);
