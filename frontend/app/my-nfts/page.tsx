@@ -16,7 +16,8 @@ import { NFTCardSkeleton } from "@/components/dashboard/nft-card-skeleton";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import toast from "react-hot-toast";
 import { ethers } from "ethers";
-import address from '@/address.json';
+import address from "@/address.json";
+import { useRouter } from "next/navigation";
 
 interface DashboardNFT {
   id: string;
@@ -40,9 +41,15 @@ const dashboardNFTs: DashboardNFT[] = mockNFTs.map((nft) => ({
 }));
 
 export default function DashboardPage() {
-  const { account, realEstateContract, escrowContract, realEstateSigner } =
-    useNFTStore();
+  const {
+    account,
+    realEstateContract,
+    escrowContract,
+    realEstateSigner,
+    setNftProperty,
+  } = useNFTStore();
 
+  const router = useRouter();
   const [myNFTs, setMyNFTs] = useState<OwnedNFT[]>([]);
   const [listedIds, setListedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,7 +60,7 @@ export default function DashboardPage() {
     "3": true,
   });
 
-  const escrowAddress = address['localhost'].Escrow;
+  const escrowAddress = address["localhost"].Escrow;
 
   const activeListingCount = useMemo(() => {
     if (!myNFTs?.length || !listedIds?.length) return 0;
@@ -109,8 +116,6 @@ export default function DashboardPage() {
         const owner = await realEstateContract.ownerOf(i);
         if (owner.toLowerCase() === account.toLowerCase()) {
           const tokenURI = await realEstateContract.tokenURI(i);
-          console.log({ owner });
-          console.log({ tokenURI });
           const metadataRes = await fetch(tokenURI);
           const metadata = await metadataRes.json();
 
@@ -135,7 +140,6 @@ export default function DashboardPage() {
   };
 
   const approveEscrowForListing = async (nftId: string) => {
-    debugger;
     if (realEstateSigner && realEstateSigner?.approve) {
       const tx = await realEstateSigner?.approve(escrowAddress, nftId);
       await tx.wait();
@@ -146,7 +150,6 @@ export default function DashboardPage() {
   };
 
   const listProperty = async (nftId: string, price: string) => {
-    debugger;
     if (!escrowContract) {
       toast.error("Failed to list property! Contract is not initialized");
       return;
@@ -159,7 +162,6 @@ export default function DashboardPage() {
       await tx.wait();
       toast.success("Property listed successfully");
     } catch (error) {
-      debugger;
       console.log("Error in list property:", error);
     }
   };
@@ -381,11 +383,17 @@ export default function DashboardPage() {
                         onClick={() =>
                           listProperty(nft?.id, nft?.priceETH as string)
                         }
-                        className="flex-1 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:shadow-lg hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-200"
+                        className="flex-1 px-4 py-2.5 cursor-pointer bg-primary text-primary-foreground font-medium rounded-lg hover:shadow-lg hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-200"
                       >
-                        {isListed ? "Cancel Listing" : "List Property"}
+                        {isListed ? "Cancel Listing" : "List Marketplace"}
                       </button>
-                      <button className="flex-1 px-4 py-2.5 bg-secondary text-secondary-foreground font-medium rounded-lg hover:bg-secondary/80 hover:shadow-lg active:scale-95 transition-all duration-200 border border-border">
+                      <button
+                        className="flex-1 px-4 py-2.5 cursor-pointer bg-secondary text-secondary-foreground font-medium rounded-lg hover:bg-secondary/80 hover:shadow-lg active:scale-95 transition-all duration-200 border border-border"
+                        onClick={() => {
+                          setNftProperty(nft);
+                          router.push(`/nft/${nft?.id}`);
+                        }}
+                      >
                         View Details
                       </button>
                     </div>

@@ -4,9 +4,19 @@ import { useState, useEffect } from "react"
 import WalletButton from "./wallet-button"
 import ThemeToggle from "./theme-toggle"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
+import clsx from "clsx"
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
+  const pathname = usePathname()
+
+  const tabs = [
+    { name: "Explore", href: "/" },
+    { name: "Mint NFT", href: "/mint" },
+    { name: "Collections", href: "/collections" },
+    { name: "My NFT's", href: "/my-nfts" },
+  ]
 
   useEffect(() => {
     const handleScroll = () => {
@@ -25,47 +35,51 @@ export default function Header() {
       }`}
     >
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        {/* Left Branding */}
         <div className="flex items-center gap-3 group cursor-pointer">
           <div className="w-11 h-11 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow duration-300">
             <span className="text-white font-bold text-lg">✦</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-semibold text-foreground tracking-tight">NFT Market</span>
-            <span className="text-xs text-muted-foreground">Premium Digital Assets</span>
+            <span className="text-lg font-semibold text-foreground tracking-tight">
+              NFT Market
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Premium Digital Assets
+            </span>
           </div>
         </div>
 
+        {/* Navigation */}
         <nav className="hidden md:flex items-center gap-8">
-          <Link
-            href="/"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
-          >
-            Explore
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
-          </Link>
-          <Link
-            href="/mint"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
-          >
-            Mint NFT
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
-          </Link>
-          <Link
-            href="#"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
-          >
-            Collections
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
-          </Link>
-          <Link
-            href="/my-nfts"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
-          >
-            My NFT's
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
-          </Link>
+          {tabs.map((tab) => {
+            const active = pathname === tab.href
+
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={clsx(
+                  "text-sm font-medium transition-colors duration-200 relative group",
+                  active
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {tab.name}
+
+                <span
+                  className={clsx(
+                    "absolute bottom-0 left-0 h-0.5 bg-primary transition-all duration-300",
+                    active ? "w-full" : "w-0 group-hover:w-full"
+                  )}
+                />
+              </Link>
+            )
+          })}
         </nav>
 
+        {/* Actions */}
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <WalletButton />
