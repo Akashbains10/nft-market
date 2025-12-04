@@ -14,6 +14,8 @@ export interface FormData {
   priceETH: string
   priceUSDC?:string
   priceUSDT?:string
+  royaltyRecipient: string
+  royaltyPercentage: string
 }
 
 export type CurrentStep = "details" | "pricing" | "review"

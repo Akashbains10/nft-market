@@ -23,25 +23,97 @@ export default function Home() {
   // ---------------------------
   // Fetch Listed NFTs
   // ---------------------------
+  // const fetchListedProperties = async () => {
+  //   try {
+  //     if (!realEstateContract || !escrowContract) return;
+
+  //     setIsLoading(true);
+  //     const listedIds = await escrowContract.getListedIds();
+  //     const properties: PropertyNFT[] = [];
+
+  //     for (let id of listedIds) {
+  //       id = Number(id);
+
+  //       const tokenURI = await realEstateContract.tokenURI(id);
+  //       const metadataRes = await fetch(tokenURI);
+  //       const metadata = await metadataRes.json();
+
+  //       properties.push({
+  //         id,
+  //         ...metadata,
+  //         isListed: true
+  //       });
+  //     }
+
+  //     setListedNFTs(properties);
+  //   } catch (err) {
+  //     console.error("Marketplace Fetch Error:", err);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
   const fetchListedProperties = async () => {
     try {
       if (!realEstateContract || !escrowContract) return;
 
       setIsLoading(true);
-      const listedIds = await escrowContract.getListedIds();
-      const properties: PropertyNFT[] = [];
 
-      for (let id of listedIds) {
-        id = Number(id);
+      // 1. All listings ever created
+      const listedEvents = await escrowContract.queryFilter(
+        escrowContract.filters.Listed()
+      );
 
-        const tokenURI = await realEstateContract.tokenURI(id);
+      console.log("Listed Events:", listedEvents);
+
+      // 2. All cancelled listings
+      const cancelledEvents = await escrowContract.queryFilter(
+        escrowContract.filters.ListingCancelled()
+      );
+
+      console.log("Cancelled Events:", cancelledEvents);
+
+
+      // 3. All sold listings
+      const soldEvents = await escrowContract.queryFilter(
+        escrowContract.filters.NFTPurchased()
+      );
+
+      console.log("Sold Events:", soldEvents);
+
+
+      // Convert cancelled & sold into sets for fast lookup
+      const cancelledSet = new Set(
+        cancelledEvents.map((e: any) => e.args.tokenId.toString())
+      );
+      const soldSet = new Set(soldEvents.map((e: any) => e.args.tokenId.toString()));
+
+      const properties: any[] = [];
+
+      for (let event of listedEvents) {
+        const tokenId = Number((event as any).args.tokenId);
+
+        // Skip those that got cancelled later
+        if (cancelledSet.has(tokenId.toString())) continue;
+
+        // Skip those that were sold
+        if (soldSet.has(tokenId.toString())) continue;
+
+        // 4. Double check that listing is still active on-chain
+        const listing = await escrowContract.getListing(tokenId);
+        if (!listing.active) continue;
+
+        // 5. Fetch metadata
+        const tokenURI = await realEstateContract.tokenURI(tokenId);
         const metadataRes = await fetch(tokenURI);
         const metadata = await metadataRes.json();
 
         properties.push({
-          id,
+          id: tokenId,
           ...metadata,
-          isListed: true
+          price: Number(listing.price),
+          seller: listing.seller,
+          isListed: true,
         });
       }
 
@@ -82,8 +154,9 @@ export default function Home() {
 
         {!loading && listedNFTs.length === 0 ? (
           <MarketPlaceEmptyState />
-        ) : loading ? 
-        <NFTCardSkeleton/> : (
+        ) : loading ? (
+          <NFTCardSkeleton />
+        ) : (
           <NFTGrid properties={listedNFTs} />
         )}
       </main>

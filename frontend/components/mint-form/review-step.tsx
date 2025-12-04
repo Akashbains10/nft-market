@@ -1,19 +1,26 @@
-"use client"
+"use client";
 
-import { ChevronRight } from "lucide-react"
-import { NFTPreviewCard } from "./nft-preview-card"
-import type { FormData } from "./types"
+import { ChevronRight } from "lucide-react";
+import { NFTPreviewCard } from "./nft-preview-card";
+import type { FormData } from "./types";
 
 interface ReviewStepProps {
-  formData: FormData
-  isMinting: boolean
-  onEditDetails: () => void
-  onEditPricing: () => void
-  onBack: () => void
-  onMint: () => void
+  formData: FormData;
+  isMinting: boolean;
+  onEditDetails: () => void;
+  onEditPricing: () => void;
+  onBack: () => void;
+  onMint: () => void;
 }
 
-export function ReviewStep({ formData, isMinting, onEditDetails, onEditPricing, onBack, onMint }: ReviewStepProps) {
+export function ReviewStep({
+  formData,
+  isMinting,
+  onEditDetails,
+  onEditPricing,
+  onBack,
+  onMint,
+}: ReviewStepProps) {
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <NFTPreviewCard
@@ -25,6 +32,8 @@ export function ReviewStep({ formData, isMinting, onEditDetails, onEditPricing, 
         priceETH={formData.priceETH}
         priceUSDC={formData.priceUSDC}
         priceUSDT={formData.priceUSDT}
+        royaltyPercentage={formData.royaltyPercentage}
+        royaltyRecipient={formData.royaltyRecipient}
         onEditDetails={onEditDetails}
         onEditPricing={onEditPricing}
       />
@@ -55,5 +64,5 @@ export function ReviewStep({ formData, isMinting, onEditDetails, onEditPricing, 
         </button>
       </div>
     </div>
-  )
+  );
 }

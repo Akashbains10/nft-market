@@ -98,12 +98,12 @@ contract Escrow is ReentrancyGuard, Ownable, Pausable {
         _;
     }
 
-    constructor(address _nftAddress, address payable _feeRecipient) Ownable(msg.sender) {
+    constructor(address _nftAddress) Ownable(msg.sender) {
         require(_nftAddress != address(0), "invalid nft");
         // require(_feeRecipient != address(0), "invalid fee recipient");
         // require(_platformFeeBps <= 1000, "fee too high"); // default guard (<=10%)
         nftAddress = _nftAddress;
-        feeRecipient = _feeRecipient;
+        // feeRecipient = _feeRecipient;
         // platformFeeBps = _platformFeeBps;
     }
 
@@ -219,10 +219,13 @@ contract Escrow is ReentrancyGuard, Ownable, Pausable {
         // validate that nft is listed or active
         require(l.active, "NFT is not listed");
 
-        // validate buyer address that must not be zero
+        // validate feeRecipient address
+        require(feeRecipient != address(0), "feeRecipient address should not be zero");
+
+        // validate buyer address
         require(finalBuyer != address(0), "Buyer address should not be zero");
 
-        // validate buyer address that must not be zero
+        // validate buyer address
         require(finalBuyer != seller, "Seller is not allowed to buy");
 
         // validate buyer paid amount must be match with purchase price

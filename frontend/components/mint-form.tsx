@@ -26,6 +26,8 @@ export default function MintForm() {
     mediaPreview: "",
     attributes: [],
     priceETH: "",
+    royaltyRecipient: "15%",
+    royaltyPercentage: "0x1234...abcd",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -194,6 +196,8 @@ export default function MintForm() {
       attributes: [],
       priceETH: "",
       mediaPreview: "",
+      royaltyRecipient: "",
+      royaltyPercentage: ""
     });
     setCurrentStep("details");
   };
