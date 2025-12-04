@@ -1,25 +1,43 @@
-//SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
+// File: contracts/MarketplaceEscrow.sol
+// SPDX-License-Identifier: Unlicense
+pragma solidity ^0.8.19;
 
-interface IERC721 {
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import "@openzeppelin/contracts/interfaces/IERC2981.sol";
+
+interface IERC721Minimal {
     function ownerOf(uint256 tokenId) external view returns (address);
     function transferFrom(address _from, address _to, uint256 _id) external;
+    function isApprovedForAll(
+        address owner,
+        address operator
+    ) external view returns (bool);
+    function getApproved(uint256 tokenId) external view returns (address);
 }
 
-contract Escrow {
+/// @title Escrow - marketplace with escrow, platform fee and EIP-2981 royalty payouts
+contract Escrow is ReentrancyGuard, Ownable, Pausable {
     address public nftAddress;
 
-    mapping(uint => bool) public isListed;
-    mapping(uint => uint) public purchaseAmount;
-    mapping(uint => address) public buyer;
-    mapping(uint => address payable) public sellerOf;
-    mapping(uint => uint) public escrowDeposits;
-    mapping(address => uint256[]) private purchasedNFTs;
-    mapping(address => uint256[]) private soldNFTs;
+    // marketplace fee in basis points (bps). 100 bps = 1%
+    uint256 public platformFeeBps; // e.g., 250 = 2.5%
+    address payable public feeRecipient;
 
-    // easy enumeration of listed ids (for frontend)
-    uint256[] private listedIds;
-    mapping(uint256 => uint256) private indexInListed; // tokenId => index in listedIds + 1 (0 means not present)
+    //Listings
+    struct Listing {
+        address payable seller;
+        uint256 price; //wei
+        bool active;
+    }
+
+    mapping(uint256 => Listing) public listings;
+
+    // escrow / deposit tracking for earnest deposits
+    mapping(uint256 => address) public buyer; // tokenId => buyer (depositor)
+    mapping(uint256 => uint256) public purchaseAmount; // mirrors listing price
 
     // Events
     event Listed(
@@ -27,6 +45,7 @@ contract Escrow {
         address indexed seller,
         uint256 price
     );
+    event ListingUpdated(uint256 indexed tokenId, uint256 newPrice);
     event EarnestDeposited(
         uint256 indexed tokenId,
         address indexed buyer,
@@ -39,199 +58,292 @@ contract Escrow {
         uint256 price
     );
     event ListingCancelled(uint256 indexed tokenId, address indexed seller);
+    event DirectPurchased(
+        uint256 indexed tokenId,
+        address indexed buyer,
+        address indexed seller,
+        uint256 price,
+        uint256 fee,
+        uint256 royalty
+    );
+    event PlatformFeeChanged(uint256 newFeeBps);
+    event FeeRecipientChanged(address newRecipient);
+    event NFTAddressUpdated(address newAddress);
+    event RoyaltyPaid(
+        uint256 indexed tokenId,
+        address indexed recipient,
+        uint256 amount
+    );
+    event Refund(uint256 indexed tokenId, address indexed to, uint256 amount);
 
-    constructor(address _nftAddress) {
+    // New events for off-chain indexing (replace on-chain arrays)
+    event NFTPurchased(
+        address indexed buyer,
+        uint256 indexed tokenId,
+        uint256 price
+    );
+    event NFTSold(
+        address indexed seller,
+        uint256 indexed tokenId,
+        uint256 price
+    );
+
+    // modifiers
+    modifier onlySeller(uint256 tokenId) {
+        require(listings[tokenId].seller == msg.sender, "only seller");
+        _;
+    }
+    modifier onlyBuyer(uint256 tokenId) {
+        require(buyer[tokenId] == msg.sender, "only buyer");
+        _;
+    }
+
+    constructor(address _nftAddress, address payable _feeRecipient) Ownable(msg.sender) {
+        require(_nftAddress != address(0), "invalid nft");
+        // require(_feeRecipient != address(0), "invalid fee recipient");
+        // require(_platformFeeBps <= 1000, "fee too high"); // default guard (<=10%)
         nftAddress = _nftAddress;
+        feeRecipient = _feeRecipient;
+        // platformFeeBps = _platformFeeBps;
     }
 
-    modifier onlyBuyer(uint _nftId) {
-        require(
-            msg.sender == buyer[_nftId],
-            "Only buyer is allowed to do this action"
+    // -------------------------
+    // Admin / owner functions
+    // -------------------------
+    function setPlatformFeeBps(uint256 _bps) external onlyOwner {
+        require(_bps <= 2000, "Bps too high"); // safety cap (<=20%)
+        platformFeeBps = _bps;
+        emit PlatformFeeChanged(_bps);
+    }
+
+    function setFeeRecipient(address payable _recipient) external onlyOwner {
+        require(_recipient != address(0), "zero address");
+        feeRecipient = _recipient;
+        emit FeeRecipientChanged(_recipient);
+    }
+
+    /// @notice withdraw stuck fees only if any (should be rarely needed as fees are forwarded immediately)
+    function withdrawStuck(
+        address payable _to,
+        uint256 _amount
+    ) external onlyOwner nonReentrant {
+        require(_to != address(0), "zero address");
+        (bool sent, ) = _to.call{value: _amount}("");
+        require(sent, "Withdraw failed");
+    }
+
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    function updateNFTAddress(address _newAddress) external onlyOwner {
+        require(_newAddress != address(0), "Zero address is not valid");
+        nftAddress = _newAddress;
+        emit NFTAddressUpdated(_newAddress);
+    }
+
+    // -------------------------
+    // Marketplace flows
+    // -------------------------
+
+    /// @notice List property for sale (seller must approve this contract)
+
+    function listProperty(
+        uint256 _tokenId,
+        uint256 _price
+    ) external whenNotPaused nonReentrant {
+        require(_price > 0, "Price should not be zero");
+
+        address tokenOwner = IERC721Minimal(nftAddress).ownerOf(_tokenId);
+        require(tokenOwner == msg.sender, "Not token owner");
+
+        // transfer NFT to escrow
+        IERC721Minimal(nftAddress).transferFrom(
+            msg.sender,
+            address(this),
+            _tokenId
         );
-        _;
+
+        listings[_tokenId] = Listing(payable(msg.sender), _price, true);
+        emit Listed(_tokenId, msg.sender, _price);
     }
 
-    modifier onlySeller(uint _nftId) {
-        require(
-            msg.sender == sellerOf[_nftId],
-            "Only seller is allowed to do this action"
+    /// @notice Update price for an existing active listing (only seller)
+    function updateListingPrice(
+        uint256 _tokenId,
+        uint256 _newPrice
+    ) external whenNotPaused nonReentrant onlySeller(_tokenId) {
+        Listing storage l = listings[_tokenId];
+        require(l.active, "NFT not listed");
+        require(_newPrice > 0, "Price should not be zero");
+        l.price = _newPrice;
+        emit ListingUpdated(_tokenId, _newPrice);
+    }
+
+    /// @notice Cancel listing and return NFT to seller (only seller)
+    function cancelListing(
+        uint256 _tokenId
+    ) external whenNotPaused nonReentrant onlySeller(_tokenId) {
+        Listing storage l = listings[_tokenId];
+        require(l.active, "NFT not listed");
+
+        // transfer NFT from contract to seller
+        IERC721Minimal(nftAddress).transferFrom(
+            address(this),
+            l.seller,
+            _tokenId
         );
-        _;
+
+        // clean states
+        l.active = false;
+        buyer[_tokenId] = address(0);
+
+        // emit cancel event
+        emit ListingCancelled(_tokenId, l.seller);
     }
 
-    function getPurchasedNfts(
-        address _user
-    ) public view returns (uint256[] memory) {
-        return purchasedNFTs[_user];
-    }
+    /// @notice Direct buy (instant purchase) — buyer pays exact price (or more, excess refunded) and finalizes
 
-    function getSoldNfts(address _user) public view returns (uint256[] memory) {
-        return soldNFTs[_user];
-    }
+    function buyNow(
+        uint256 _tokenId
+    ) external payable whenNotPaused nonReentrant {
+        Listing storage l = listings[_tokenId];
+        address payable seller = l.seller;
+        uint256 price = l.price;
+        address finalBuyer = msg.sender;
 
-    /// @notice Internal: remove tokenId from listedIds using swap & pop
-    function _removeFromListed(uint256 _nftId) internal {
-        uint256 idxPlusOne = indexInListed[_nftId];
-        if (idxPlusOne == 0) return; // not present
+        // validate that nft is listed or active
+        require(l.active, "NFT is not listed");
 
-        uint256 idx = idxPlusOne - 1;
-        uint256 lastIndex = listedIds.length - 1;
-        if (idx != lastIndex) {
-            uint256 lastId = listedIds[lastIndex];
-            listedIds[idx] = lastId;
-            indexInListed[lastId] = idx + 1;
+        // validate buyer address that must not be zero
+        require(finalBuyer != address(0), "Buyer address should not be zero");
+
+        // validate buyer address that must not be zero
+        require(finalBuyer != seller, "Seller is not allowed to buy");
+
+        // validate buyer paid amount must be match with purchase price
+        require(msg.value >= price, "Insufficient Funds");
+
+        // clean states
+        l.active = false;
+        l.price = 0;
+
+        // compute royalty via EIP-2981 if supported
+        (address royaltyRecipient, uint256 royaltyAmount) = _getRoyaltyInfo(
+            _tokenId,
+            price
+        );
+
+        // compute platform fee (applies on gross sale price)
+        uint256 platformFee = (price * platformFeeBps) / 10000;
+
+        // sanity: price must cover royalty + fees
+        require(
+            price >= royaltyAmount + platformFee,
+            "Fees exceeds than NFT Price"
+        );
+
+        // forward platform fee immediately
+        (bool paid, ) = feeRecipient.call{value: platformFee}(" ");
+        require(paid, "Platform fee transfer failed");
+
+        // send royalty if present
+        if (royaltyAmount > 0) {
+            (bool sent, ) = payable(royaltyRecipient).call{
+                value: royaltyAmount
+            }("");
+            require(sent, "Royalty amount transfer failed");
+            emit RoyaltyPaid(_tokenId, royaltyRecipient, royaltyAmount);
         }
-        listedIds.pop();
-        indexInListed[_nftId] = 0;
-    }
 
-    /// @notice List property (marketplace style, no buyer pre-defined)
-    function listProperty(uint _nftId, uint _purchaseAmount) public {
-        require(!isListed[_nftId], "Already listed");
-
-        address tokenOwner = IERC721(nftAddress).ownerOf(_nftId);
-        require(
-            tokenOwner == msg.sender,
-            "Only token owners are allowed to list"
-        );
-        require(_purchaseAmount > 0, "Purchase amount must be greater than 0");
-
-        // transfer the NFT to the contract for escrow
-        IERC721(nftAddress).transferFrom(msg.sender, address(this), _nftId);
-
-        isListed[_nftId] = true;
-        purchaseAmount[_nftId] = _purchaseAmount;
-        sellerOf[_nftId] = payable(msg.sender);
-
-        listedIds.push(_nftId);
-        indexInListed[_nftId] = listedIds.length; // store index+1
-
-        emit Listed(_nftId, msg.sender, _purchaseAmount);
-    }
-
-    /// @notice Buyer deposits the full purchase amount upfront
-    function depositEarnest(uint _nftId) public payable {
-        require(isListed[_nftId], "NFT not listed");
-        require(
-            msg.value >= purchaseAmount[_nftId],
-            "Insufficient funds deposited"
-        );
-
-        // track buyer and escrow deposit
-        buyer[_nftId] = msg.sender;
-        escrowDeposits[_nftId] += msg.value;
-
-        emit EarnestDeposited(_nftId, msg.sender, msg.value);
-    }
-
-    /// @notice Finalize sale: transfers NFT to buyer and funds to seller
-    function finalizeSale(uint _nftId) public onlyBuyer(_nftId) {
-        require(isListed[_nftId], "NFT is not listed");
-        require(
-            escrowDeposits[_nftId] >= purchaseAmount[_nftId],
-            "Insufficient funds deposited"
-        );
-
-        address payable seller = sellerOf[_nftId];
-        address finalBuyer = buyer[_nftId];
-
-        uint256 amount = escrowDeposits[_nftId];
-
-        // track purchased NFTs for buyer
-        purchasedNFTs[finalBuyer].push(_nftId);
-
-        // track sold NFTs for seller
-        soldNFTs[seller].push(_nftId);
-
-        // cleanup before external calls
-        isListed[_nftId] = false;
-        purchaseAmount[_nftId] = 0;
-        buyer[_nftId] = address(0);
-        // sellerOf[_nftId] = payable(address(0));
-        escrowDeposits[_nftId] = 0;
-
-        _removeFromListed(_nftId);
-
-        // send funds to seller
-        (bool success, ) = seller.call{value: amount}("");
-        require(success, "Failed to finalize the sale");
+        // send seller amount
+        uint256 sellerAmount = price - royaltyAmount - platformFee;
+        (bool sellerSent, ) = seller.call{value: sellerAmount}("");
+        require(sellerSent, "Seller amount transfer failed");
 
         // transfer NFT to buyer
-        IERC721(nftAddress).transferFrom(address(this), finalBuyer, _nftId);
+        IERC721Minimal(nftAddress).transferFrom(
+            address(this),
+            finalBuyer,
+            _tokenId
+        );
 
-        emit Finalized(_nftId, finalBuyer, seller, amount);
-    }
+        // Emit events for off-chain indexing instead of storing arrays on-chain
+        emit NFTPurchased(finalBuyer, _tokenId, price);
+        emit NFTSold(seller, _tokenId, price);
 
-    /// @notice Cancel a listing: only seller can cancel before sale
-    function cancelListing(uint256 _nftId) public onlySeller(_nftId) {
-        require(isListed[_nftId], "NFT not listed");
+        // refund excess if buyer overpaid
+        uint256 overPaidAmount = msg.value - price;
 
-        address payable seller = sellerOf[_nftId];
-        address currentBuyer = buyer[_nftId];
-        uint256 deposited = escrowDeposits[_nftId];
-
-        // cleanup listing state
-        isListed[_nftId] = false;
-        purchaseAmount[_nftId] = 0;
-        buyer[_nftId] = address(0);
-        sellerOf[_nftId] = payable(address(0));
-        escrowDeposits[_nftId] = 0;
-
-        _removeFromListed(_nftId);
-
-        // return NFT to seller
-        IERC721(nftAddress).transferFrom(address(this), seller, _nftId);
-
-        // refund buyer if deposited
-        if (deposited > 0 && currentBuyer != address(0)) {
-            (bool refunded, ) = payable(currentBuyer).call{value: deposited}(
-                ""
-            );
-            require(refunded, "Refund to buyer failed");
+        if (overPaidAmount > 0) {
+            (bool sent, ) = payable(finalBuyer).call{value: overPaidAmount}("");
+            require(sent, "Refund transfer failed");
+            emit Refund(_tokenId, finalBuyer, overPaidAmount);
         }
 
-        emit ListingCancelled(_nftId, seller);
+        emit DirectPurchased(
+            _tokenId,
+            finalBuyer,
+            seller,
+            price,
+            platformFee,
+            royaltyAmount
+        );
     }
 
-    function getListedIds() public view returns (uint256[] memory) {
-        return listedIds;
+    // -------------------------
+    // Royalty helper
+    // -------------------------
+    /// @dev Returns (recipient, royaltyAmount) if token contract supports EIP-2981. Otherwise (address(0), 0).
+    function _getRoyaltyInfo(
+        uint256 tokenId,
+        uint256 salePrice
+    ) internal view returns (address, uint256) {
+        // check if the NFT contract supports ERC2981
+        try
+            IERC165(nftAddress).supportsInterface(type(IERC2981).interfaceId)
+        returns (bool isSupport) {
+            if (isSupport) {
+                try
+                    IERC2981(nftAddress).royaltyInfo(tokenId, salePrice)
+                returns (address receiver, uint256 royaltyAmount) {
+                    // royaltyAmount may be zero if no royalty set
+                    return (receiver, royaltyAmount);
+                } catch {
+                    // fallback to none
+                    return (address(0), 0);
+                }
+            } else {
+                return (address(0), 0);
+            }
+        } catch {
+            return (address(0), 0);
+        }
     }
 
-    function getAllListings()
+    function getListing(uint256 _tokenId) public view returns (Listing memory) {
+        return listings[_tokenId];
+    }
+
+    function getPlatformInfo()
         public
         view
-        returns (
-            uint256[] memory ids,
-            address[] memory sellers,
-            uint256[] memory prices,
-            bool[] memory listed
-        )
+        returns (uint256 feeBps, address recipient)
     {
-        uint256 len = listedIds.length;
-        ids = new uint256[](len);
-        sellers = new address[](len);
-        prices = new uint256[](len);
-        listed = new bool[](len);
-
-        for (uint256 i = 0; i < len; i++) {
-            uint256 tokenId = listedIds[i];
-            ids[i] = tokenId;
-            sellers[i] = sellerOf[tokenId];
-            prices[i] = purchaseAmount[tokenId];
-            listed[i] = isListed[tokenId];
-        }
+        return (platformFeeBps, feeRecipient);
     }
 
+    // receive / fallback
     receive() external payable {
-        revert("Direct deposits not allowed; use depositEarnest");
+        revert("Direct deposits not allowed; use buyNow");
     }
 
+    // fallback will trigger if user call any non-existent function
     fallback() external payable {
         revert("Fallback not allowed");
-    }
-
-    function getBalance() public view returns (uint) {
-        return address(this).balance;
     }
 }
