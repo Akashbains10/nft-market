@@ -11,10 +11,11 @@ import { PricingStep } from "./mint-form/pricing-step";
 import { ReviewStep } from "./mint-form/review-step";
 import type { FormData, Attribute, CurrentStep } from "./mint-form/types";
 import useNFTStore from "@/store/useNFTStore";
+import { useRouter } from "next/navigation";
 
 export default function MintForm() {
-  // const { toast } = useToast()
-  const { realEstateContract, realEstateSigner } = useNFTStore();
+  const router = useRouter();
+  const { realEstateSigner, account } = useNFTStore();
   const [currentStep, setCurrentStep] = useState<CurrentStep>("details");
   const [isMinting, setIsMinting] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,8 +27,8 @@ export default function MintForm() {
     mediaPreview: "",
     attributes: [],
     priceETH: "",
-    royaltyRecipient: "15%",
-    royaltyPercentage: "0x1234...abcd",
+    royaltyRecipient: account ?? "",
+    royaltyPercentage: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -57,13 +58,20 @@ export default function MintForm() {
     }
   };
 
-  const uploadFileToIPFS = async (file: File): Promise<string> => {
+  const uploadFileToIPFS = async (
+    file: File
+  ): Promise<{ hash: string; url: string }> => {
     const endpoint = "/pinning/pinFileToIPFS";
-    const GATEWAY_URL = process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
     const formData = new FormData();
     formData.append("file", file);
-    const response = await axios.post(endpoint, formData);
-    return `${GATEWAY_URL}/${response.data.IpfsHash}`;
+
+    const res = await axios.post(endpoint, formData);
+    const hash = res.data.IpfsHash;
+
+    return {
+      hash,
+      url: `${process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL}/${hash}`,
+    };
   };
 
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,7 +79,7 @@ export default function MintForm() {
       setLoading(true);
       const file = e.target.files?.[0];
       if (file) {
-        const ipfsImageUrl = await uploadFileToIPFS(file);
+        const { url: ipfsImageUrl } = await uploadFileToIPFS(file);
         const reader = new FileReader();
         reader.onloadend = () => {
           setFormData((prev) => ({
@@ -163,26 +171,29 @@ export default function MintForm() {
     }
   };
 
-  const uploadMetadataToIPFS = async (metadata: any): Promise<string> => {
+  const uploadMetadataToIPFS = async (
+    metadata: any
+  ): Promise<{ hash: string; url: string }> => {
+    const endpoint = "/pinning/pinJSONToIPFS";
+
+    const res = await axios.post(endpoint, {
+      pinataMetadata: { name: metadata?.name ?? Date.now() },
+      pinataContent: metadata,
+    });
+
+    const hash = res.data.IpfsHash;
+
+    return {
+      hash,
+      url: `${process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL}/${hash}`,
+    };
+  };
+
+  const unpinHash = async (hash: string) => {
     try {
-      const endpoint = "/pinning/pinJSONToIPFS";
-      const GATEWAY_URL = process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
-      const response = await axios.post(endpoint, {
-        pinataMetadata: {
-          name: metadata?.name ?? Date.now(),
-        },
-        pinataContent: metadata,
-      });
-      return `${GATEWAY_URL}/${response.data.IpfsHash}`;
-    } catch (error: any) {
-      console.error("Error uploading metadata to IPFS:", error);
-
-      const msg =
-        error?.response?.data?.error ||
-        error?.message ||
-        "Failed to upload metadata to IPFS.";
-
-      throw new Error(msg);
+      await axios.delete(`/pinning/unpin/${hash}`);
+    } catch (err) {
+      console.warn("Failed to unpin hash:", hash, err);
     }
   };
 
@@ -197,9 +208,15 @@ export default function MintForm() {
       priceETH: "",
       mediaPreview: "",
       royaltyRecipient: "",
-      royaltyPercentage: ""
+      royaltyPercentage: "",
     });
     setCurrentStep("details");
+    router.push("/my-nfts");
+  };
+
+  const convertPercentageToBPS = (percentage: string = "0"): string => {
+    const percentNum = parseFloat(percentage);
+    return Math.round(percentNum * 100)?.toString();
   };
 
   const handleMintNFT = async () => {
@@ -207,26 +224,44 @@ export default function MintForm() {
       toast.error("RealEstate contract is not initialized");
       return;
     }
+
+    let metadataHash: string | null = null;
+
     try {
       setIsMinting(true);
-      const { mediaPreview, ...metadata } = formData;
-      const ipfsURL = await uploadMetadataToIPFS(metadata);
 
+      const { mediaPreview, royaltyRecipient, royaltyPercentage, ...metadata } =
+        formData;
+
+      // Upload metadata
+      const metadataRes = await uploadMetadataToIPFS(metadata);
+      metadataHash = metadataRes.hash;
+
+      // Mint NFT
       if (realEstateSigner.mintProperty) {
-        // 2. Mint NFT using RealEstate smart contract
-        const tx = await realEstateSigner?.mintProperty(ipfsURL);
+        const tx = await realEstateSigner.mintProperty(
+          metadataRes.url,
+          royaltyRecipient,
+          convertPercentageToBPS(royaltyPercentage)
+        );
+
         const receipt = await tx.wait();
 
-        if (receipt?.status === 1) {
+        if (receipt.status === 1) {
           console.log("Minted! TxHash:", receipt.hash);
           afterSuccess();
         } else {
-          toast.error("Failed to mint NFT");
+          throw new Error("Mint transaction reverted");
         }
       }
-    } catch (error) {
-      toast.error("Failed to mint NFT. Please try again.");
-      console.log("Error in minting:", error);
+    } catch (err) {
+      toast.error("Failed to mint NFT. Cleaning up...");
+      console.log("Error in minting:", err);
+
+      // Cleanup: unpin metadata
+      if (metadataHash) {
+        await unpinHash(metadataHash);
+      }
     } finally {
       setIsMinting(false);
     }

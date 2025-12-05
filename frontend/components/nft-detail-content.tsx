@@ -7,6 +7,7 @@ import BuyNFTModal from "./buy-nft-modal";
 import { PropertyNFT } from "@/types/property";
 import addresses from "@/address.json";
 import useNFTStore from "@/store/useNFTStore";
+import { ListedEvent } from "@/types/nft";
 
 interface NFTDetailContentProps {
   nft: PropertyNFT;
@@ -50,8 +51,28 @@ export default function NFTDetailContent({
     const handlePurchaseBtn = async () => {
       if (!escrowContract || !nft?.id) return;
 
-      const sellerOfNFT = await escrowContract.sellerOf(nft.id);
-      setIsPurchaseDisabled(account === sellerOfNFT);
+      try {
+        let isDisabled = true;
+
+        const listedEvents = (await escrowContract.queryFilter(
+          escrowContract.filters.Listed()
+        )) as ListedEvent[];
+
+        const targetEvent = listedEvents.find(
+          (e) => Number(e.args.tokenId) === Number(nft.id)
+        );
+
+        const sellerOfNFT = targetEvent?.args?.seller;
+
+        if (sellerOfNFT) {
+          isDisabled = account?.toLowerCase() === sellerOfNFT.toLowerCase();
+        }
+
+        setIsPurchaseDisabled(isDisabled);
+      } catch (err) {
+        console.error("Error determining purchase button state:", err);
+        setIsPurchaseDisabled(true);
+      }
     };
 
     handlePurchaseBtn();
@@ -271,7 +292,7 @@ export default function NFTDetailContent({
         <button
           onClick={() => setIsBuyModalOpen(true)}
           disabled={isPurchaseDisabled}
-          title={isPurchaseDisabled ? `You can't buy your own property` : ''}
+          title={isPurchaseDisabled ? `You can't buy your own property` : ""}
           className="w-full bg-gradient-to-r from-primary to-accent hov er:from-primary/90 hover:to-accent/90 active:scale-95 text-primary-foreground px-6 py-4 rounded-lg font-semibold shadow-md hover:shadow-xl transition-all duration-300 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:from-primary disabled:hover:to-accent disabled:active:scale-100"
         >
           Purchase NFT

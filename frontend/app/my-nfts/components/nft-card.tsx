@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 interface NFTCardProps {
   nft: OwnedNFT;
   isListed: boolean;
-  onListClick: (nftId: string, price: string) => void;
+  onListClick: (nftId: number, price: string) => void;
+  cancelListedNFT: (id: number) => Promise<any>;
   onSetNftProperty: (nft: OwnedNFT) => void;
 }
 
@@ -13,6 +14,7 @@ export function NFTCard({
   isListed,
   onListClick,
   onSetNftProperty,
+  cancelListedNFT,
 }: NFTCardProps) {
   const router = useRouter();
 
@@ -52,9 +54,7 @@ export function NFTCard({
         <h3 className="text-lg font-semibold text-foreground mb-1 line-clamp-1">
           {nft?.name}
         </h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          {nft?.collection}
-        </p>
+        <p className="text-sm text-muted-foreground mb-4">{nft?.collection}</p>
 
         {/* Details */}
         <div className="grid grid-cols-2 gap-3 mb-4 pb-4 border-b border-border">
@@ -69,7 +69,11 @@ export function NFTCard({
         {/* Action Buttons */}
         <div className="flex gap-3">
           <button
-            onClick={() => onListClick(nft?.id, nft?.priceETH as string)}
+            onClick={() => {
+              isListed ?
+              cancelListedNFT(nft?.id) :
+              onListClick(nft?.id, nft?.priceETH as string);
+            }}
             className="flex-1 px-4 py-2.5 cursor-pointer bg-primary text-primary-foreground font-medium rounded-lg hover:shadow-lg hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-200"
           >
             {isListed ? "Cancel Listing" : "List Marketplace"}

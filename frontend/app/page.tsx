@@ -64,7 +64,12 @@ export default function Home() {
         escrowContract.filters.Listed()
       );
 
-      console.log("Listed Events:", listedEvents);
+      const activeListings = new Map();
+      listedEvents.forEach((e: any) => {
+        activeListings.set(Number(e.args.tokenId), e.args.seller.toLowerCase());
+      });
+
+      console.log("activeListings:", activeListings);
 
       // 2. All cancelled listings
       const cancelledEvents = await escrowContract.queryFilter(
@@ -73,7 +78,6 @@ export default function Home() {
 
       console.log("Cancelled Events:", cancelledEvents);
 
-
       // 3. All sold listings
       const soldEvents = await escrowContract.queryFilter(
         escrowContract.filters.NFTPurchased()
@@ -81,20 +85,20 @@ export default function Home() {
 
       console.log("Sold Events:", soldEvents);
 
-
       // Convert cancelled & sold into sets for fast lookup
       const cancelledSet = new Set(
         cancelledEvents.map((e: any) => e.args.tokenId.toString())
       );
-      const soldSet = new Set(soldEvents.map((e: any) => e.args.tokenId.toString()));
+      const soldSet = new Set(
+        soldEvents.map((e: any) => e.args.tokenId.toString())
+      );
 
       const properties: any[] = [];
 
-      for (let event of listedEvents) {
-        const tokenId = Number((event as any).args.tokenId);
+      for (let tokenId of Array.from(activeListings.keys())) {
 
         // Skip those that got cancelled later
-        if (cancelledSet.has(tokenId.toString())) continue;
+        // if (cancelledSet.has(tokenId.toString())) continue;
 
         // Skip those that were sold
         if (soldSet.has(tokenId.toString())) continue;

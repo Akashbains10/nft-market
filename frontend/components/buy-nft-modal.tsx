@@ -84,18 +84,27 @@ export default function BuyModal({ nft, isOpen, onClose }: BuyModalProps) {
         return;
       }
 
-      const purchaseAmount = await escrowContract.purchaseAmount(nft.id);
+      // const purchaseAmount = await escrowContract.purchaseAmount(nft.id);
 
-      //buyer pay the deposit earnest
-      await depositEarnest(nft.id, purchaseAmount);
+      // //buyer pay the deposit earnest
+      // await depositEarnest(nft.id, purchaseAmount);
 
-      //close the modal
-      onClose();
+      const tx1 = await escrowContract.setFeeRecipient("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
+      await tx1.wait();
+
+      const tx = await escrowContract.buyNow(nft.id);
+      const receipt = await tx.wait();
+      if (receipt.status === 1) {
+        toast.success("NFT purchased successfully"); 
+        onClose();
+      }else {
+        toast.error("Failed to purchase NFT")
+      }
 
       //finalize the sale and transfer the ownership
-      await finalizeSale(nft?.id);
-      toast.success("NFT purchased successfully");
+      // await finalizeSale(nft?.id);
     } catch (error: any) {
+      console.log('Purchase error:', error);
       const message =
         error?.reason ||
         error?.data?.message ||

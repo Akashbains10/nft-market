@@ -7,7 +7,8 @@ interface NFTGridProps {
   nfts: OwnedNFT[];
   listedIds: number[];
   isLoading: boolean;
-  onListClick: (nftId: string, price: string) => void;
+  onListClick: (nftId: number, price: string) => void;
+  cancelListedNFT: (id: number)=> Promise<void>;
   onSetNftProperty: (nft: OwnedNFT) => void;
 }
 
@@ -16,6 +17,7 @@ export function NFTGrid({
   listedIds,
   isLoading,
   onListClick,
+  cancelListedNFT,
   onSetNftProperty,
 }: NFTGridProps) {
   if (isLoading) {
@@ -36,6 +38,7 @@ export function NFTGrid({
             nft={nft}
             isListed={isListed}
             onListClick={onListClick}
+            cancelListedNFT={cancelListedNFT}
             onSetNftProperty={onSetNftProperty}
           />
         );

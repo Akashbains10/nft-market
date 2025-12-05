@@ -19,12 +19,12 @@ export default function NFTGrid({
   const { setNftProperty } = useNFTStore();
   const [liked, setLiked] = useState<Set<string>>(new Set());
 
-  const toggleLike = (id: string) => {
+  const toggleLike = (id: number) => {
     const newLiked = new Set(liked);
-    if (newLiked.has(id)) {
-      newLiked.delete(id);
+    if (newLiked.has(id?.toString())) {
+      newLiked.delete(id?.toString());
     } else {
-      newLiked.add(id);
+      newLiked.add(id?.toString());
     }
     setLiked(newLiked);
   };
@@ -34,7 +34,6 @@ export default function NFTGrid({
     <div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {properties?.map((nft, idx) => {
-          console.log("Nft", nft)
           return (
             <Link
               key={idx}

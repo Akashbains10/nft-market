@@ -80,53 +80,212 @@ export default function DashboardPage() {
     return result;
   }, [searchQuery, activeFilter, myNFTs]);
 
+  // const fetchMyProperties = async () => {
+  //   try {
+  //     if (!realEstateContract || !escrowContract || !account) return;
+
+  //     setIsLoading(true);
+
+  //     const owned = [];
+  //     const totalSupply = await realEstateContract.totalSupply();
+  //     const user = account.toLowerCase();
+  //     console.log("Total Supply:", totalSupply);
+
+  //     const listedEvents = await escrowContract.queryFilter(
+  //       escrowContract.filters.Listed()
+  //     );
+
+  //     const cancelledEvents = await escrowContract.queryFilter(
+  //       escrowContract.filters.ListingCancelled()
+  //     );
+
+  //     const purchasedEvents = await escrowContract.queryFilter(
+  //       escrowContract.filters.NFTPurchased()
+  //     );
+
+  //     const soldEvents = await escrowContract.queryFilter(
+  //       escrowContract.filters.NFTSold()
+  //     );
+
+  //     // const allEvents = [
+  //     //   ...listedEvents.map((e) => ({ type: "listed", ...e })),
+  //     //   ...cancelledEvents.map((e) => ({ type: "cancelled", ...e })),
+  //     // ];
+
+  //     // console.log("All Events:", allEvents);
+
+  //     // Map of tokenId → last list event
+  //     const activeListings = new Map();
+  //     listedEvents.forEach((e: any) => {
+  //       activeListings.set(Number(e.args.tokenId), e.args.seller.toLowerCase());
+  //     });
+
+  //     // Remove cancelled listings
+  //     cancelledEvents.forEach((e: any) => {
+  //       const id = Number(e.args.tokenId);
+  //       if (activeListings.has(id)) activeListings.delete(id);
+  //     });
+
+  //     // Track purchased NFTs
+  //     const purchasedByUser = new Set(
+  //       purchasedEvents
+  //         .filter((e: any) => e.args.buyer.toLowerCase() === user)
+  //         .map((e: any) => Number(e.args.tokenId))
+  //     );
+
+  //     // Track sold NFTs
+  //     const soldByUser = new Set(
+  //       soldEvents
+  //         .filter((e: any) => e.args.seller.toLowerCase() === user)
+  //         .map((e: any) => Number(e.args.tokenId))
+  //     );
+
+  //     const allListingIds = Array.from(activeListings.keys());
+  //     setListedIds(allListingIds);
+
+  //     for (let i = 1; i <= Number(totalSupply); i++) {
+  //       const id = i;
+
+  //       // owner from NFT contract
+  //       const realOwner = (await realEstateContract.ownerOf(id)).toLowerCase();
+
+  //       const isListed = activeListings.has(id);
+  //       const listingSeller = activeListings.get(id);
+
+  //       // Condition: include only NFTs that belong to user
+  //       const userOwns =
+  //         (!isListed && realOwner === user) ||
+  //         (isListed && listingSeller === user);
+
+  //       if (!userOwns) continue;
+
+  //       // fetch metadata
+  //       const tokenURI = await realEstateContract.tokenURI(id);
+  //       const metadataRes = await fetch(tokenURI);
+  //       const metadata = await metadataRes.json();
+
+  //       let status = "unlisted";
+
+  //       if (isListed) status = "listed";
+  //       else if (purchasedByUser.has(id)) status = "purchased";
+  //       else if (soldByUser.has(id)) status = "sold";
+
+  //       owned.push({
+  //         id,
+  //         ...metadata,
+  //         status,
+  //       });
+  //     }
+
+  //     setMyNFTs(owned);
+  //   } catch (err) {
+  //     console.error("My NFTs Fetch Error: ", err);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
   const fetchMyProperties = async () => {
     try {
       if (!realEstateContract || !escrowContract || !account) return;
+
       setIsLoading(true);
 
       const owned = [];
       const totalSupply = await realEstateContract.totalSupply();
-      console.log({ totalSupply });
+      const user = account.toLowerCase();
+      console.log("Total Supply:", totalSupply);
 
-      const allListings = (await escrowContract.getListedIds()).map(Number);
-      const purchasedNFTs = (
-        await escrowContract.getPurchasedNfts(account)
-      ).map(Number);
-      const soldNFTs = (await escrowContract.getSoldNfts(account)).map(Number);
-      setListedIds(allListings);
+      const listedEvents = await escrowContract.queryFilter(
+        escrowContract.filters.Listed()
+      );
 
-      for (let i = 1; i <= Number(totalSupply); i++) {
-        const sellerOfNFT = await escrowContract.sellerOf(i);
-        const contractOwner = await realEstateContract.ownerOf(i);
-        const isListed = allListings.includes(i);
+      const cancelledEvents = await escrowContract.queryFilter(
+        escrowContract.filters.ListingCancelled()
+      );
 
-        if (
-          (!isListed && contractOwner.toLowerCase() === account.toLowerCase()) ||
-          (isListed && sellerOfNFT.toLowerCase() === account.toLowerCase())
-        ) {
-          const tokenURI = await realEstateContract.tokenURI(i);
-          const metadataRes = await fetch(tokenURI);
-          const metadata = await metadataRes.json();
+      const purchasedEvents = await escrowContract.queryFilter(
+        escrowContract.filters.NFTPurchased()
+      );
 
-          const isListed = Array.from(allListings).length
-            ? Array.from(allListings).find((x) => x === i)
-            : false;
+      const soldEvents = await escrowContract.queryFilter(
+        escrowContract.filters.NFTSold()
+      );
 
-          const status = isListed
-            ? "listed"
-            : purchasedNFTs.includes(i)
-            ? "purchased"
-            : soldNFTs.includes(i)
-            ? "sold"
-            : "unlisted";
+      // Map tokenId → seller from last list event (initial)
+      const activeListings = new Map();
+      listedEvents.forEach((e: any) => {
+        activeListings.set(Number(e.args.tokenId), e.args.seller.toLowerCase());
+      });
 
-          owned.push({
-            id: i,
-            ...metadata,
-            status
-          });
+      cancelledEvents.forEach((e: any) => {
+        const id = Number(e.args.tokenId);
+
+        if (!activeListings.has(id)) return;
+
+        // Find last list event for this token
+        const lastListEvent = listedEvents
+          .filter((le: any) => Number(le.args.tokenId) === id)
+          .sort((a: any, b: any) => b.blockNumber - a.blockNumber)[0];
+
+        const cancelEvent = e;
+
+        // If the cancel event is newer → listing is cancelled
+        if (cancelEvent.blockNumber > lastListEvent.blockNumber) {
+          activeListings.delete(id);
         }
+      });
+
+      // Track purchased NFTs
+      const purchasedByUser = new Set(
+        purchasedEvents
+          .filter((e: any) => e.args.buyer.toLowerCase() === user)
+          .map((e: any) => Number(e.args.tokenId))
+      );
+
+      // Track sold NFTs
+      const soldByUser = new Set(
+        soldEvents
+          .filter((e: any) => e.args.seller.toLowerCase() === user)
+          .map((e: any) => Number(e.args.tokenId))
+      );
+
+      // Update your state
+      const allListingIds = Array.from(activeListings.keys());
+      setListedIds(allListingIds);
+
+      // Loop through all NFTs
+      for (let i = 1; i <= Number(totalSupply); i++) {
+        const id = i;
+
+        // owner from NFT contract
+        const realOwner = (await realEstateContract.ownerOf(id)).toLowerCase();
+
+        const isListed = activeListings.has(id);
+        const listingSeller = activeListings.get(id);
+
+        // Include NFTs that the user owns
+        const userOwns =
+          (!isListed && realOwner === user) ||
+          (isListed && listingSeller === user);
+
+        if (!userOwns) continue;
+
+        // fetch metadata
+        const tokenURI = await realEstateContract.tokenURI(id);
+        const metadataRes = await fetch(tokenURI);
+        const metadata = await metadataRes.json();
+
+        let status = "unlisted";
+        if (isListed) status = "listed";
+        else if (purchasedByUser.has(id)) status = "purchased";
+        else if (soldByUser.has(id)) status = "sold";
+
+        owned.push({
+          id,
+          ...metadata,
+          status,
+        });
       }
 
       setMyNFTs(owned);
@@ -147,20 +306,46 @@ export default function DashboardPage() {
     }
   };
 
-  const listProperty = async (nftId: string, price: string) => {
+  const listProperty = async (nftId: number, price: string) => {
     if (!escrowContract) {
       toast.error("Failed to list property! Contract is not initialized");
       return;
     }
 
     try {
-      await approveEscrowForListing(nftId);
+      await approveEscrowForListing(nftId?.toString());
       const priceWei = ethers.parseEther(price.toString());
       const tx = await escrowContract.listProperty(nftId, priceWei);
       await tx.wait();
       toast.success("Property listed successfully");
     } catch (error) {
       console.log("Error in list property:", error);
+    }
+  };
+
+  const cancelListedNFT = async (id: number) => {
+    if (!escrowContract) {
+      console.log("Escrow contract is not initialized");
+      return;
+    }
+    try {
+      const tx = await escrowContract.cancelListing(id);
+      const receipt = await tx.wait();
+
+      if (receipt.status === 1) {
+        toast.success("NFT has been cancelled from listing successfully");
+      } else {
+        toast.error("Transaction failed or reverted");
+      }
+    } catch (error: any) {
+      console.log("Error:", error);
+      const msg =
+        error?.reason ||
+        error?.error?.message ||
+        error?.data?.message ||
+        error?.message ||
+        "Failed to cancel listing";
+      toast.error(msg);
     }
   };
 
@@ -198,6 +383,7 @@ export default function DashboardPage() {
           listedIds={listedIds}
           isLoading={isLoading}
           onListClick={listProperty}
+          cancelListedNFT={cancelListedNFT}
           onSetNftProperty={setNftProperty}
         />
       </div>

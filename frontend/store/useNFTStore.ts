@@ -3,7 +3,7 @@ import { BaseContract, Contract } from "ethers";
 import {create} from "zustand";
 
 export interface IRealContract extends BaseContract {
-  mintProperty?: (uri: string)=> Promise<any>;
+  mintProperty?: (uri: string, recipient: string, royaltyBps: string)=> Promise<any>;
   approve?:(id: string, price: string)=> Promise<any> 
 }
 

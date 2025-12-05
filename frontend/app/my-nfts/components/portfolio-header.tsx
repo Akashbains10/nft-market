@@ -1,4 +1,5 @@
 import { Plus } from "lucide-react";
+import Link from "next/link";
 
 export function PortfolioHeader() {
   return (
@@ -11,13 +12,13 @@ export function PortfolioHeader() {
           Manage and list your NFT collection
         </p>
       </div>
-      <a
+      <Link
         href="/mint"
         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-300"
       >
         <Plus size={20} />
         Create NFT
-      </a>
+      </Link>
     </div>
   );
 }
